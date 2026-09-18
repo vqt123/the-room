@@ -91,7 +91,8 @@ def set_hero(sess, data=None, clear=False):
 
 def _fetch(url, timeout=30):
     import urllib.request
-    with urllib.request.urlopen(url, timeout=timeout) as r:
+    from _kv import _open
+    with _open(urllib.request.Request(url), timeout) as r:
         return r.read()
 
 
@@ -105,7 +106,7 @@ def total_rounds(sess):
 
 
 def render_mode(sess):
-    m = _kv.cmd("GET", f"ks:{sess}:render") or "page"
+    m = _kv.cmd("GET", f"ks:{sess}:render") or "panels"
     return m if m in RENDERS else "page"
 
 
@@ -343,10 +344,13 @@ def start(sess):
         use_prev = render != "panels" and bool(prev_done)
         plan = _llm.smash(HERO_NAME, r, total, verdict.upper(), meta["setup"]["hero_description"], meta["scene"],
                           previous, meta["cont"], pools["kill"]["nouns"], pools["kill"]["verbs"],
-                          pools["save"]["nouns"], pools["save"]["verbs"], previous_page=use_prev)
+                          pools["save"]["nouns"], pools["save"]["verbs"], previous_page=use_prev,
+                          panels_exactly=4 if render == "panels" else 0)
         panels = plan.get("panels") or []
-        if not panels or not plan.get("page_prompt"):
+        if not panels or (render != "panels" and not plan.get("page_prompt")):
             raise RuntimeError("the smash came back without panels or a page prompt: " + plan.get("raw", "")[:200])
+        if render == "panels":
+            panels = panels[:4]
         seed = random.randrange(1, 2 ** 31)
         c = client()
         hero = _hero_bytes(sess)

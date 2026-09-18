@@ -24,12 +24,14 @@ and told only their own. The prompts are Team 6's (`build/team_prompts.txt`, kep
    the story so far, the continuity and a fixed verdict, and returns JSON: title, story, one
    plan per panel (visual, caption, bubbles), a single `page_prompt`, continuity and the next
    round's scene. The next scene goes up at once, so people answer round 2 while page 1 draws.
-4. **Render, one Comfy job on the endpoint.** A **Nano Banana** API node inside the graph draws
-   the whole page (panels, gutters, lettering) from `page_prompt`, with the hero's photo as the
-   first reference image and, from round 2, the previous page as the second (both scaled to
-   the page shape and batched, because the node takes one image input). A fallback per
-   session draws each panel plan as its own picture on the GPU and lets the pages overlay the
-   captions and bubbles.
+4. **Render, one Comfy job on the endpoint.** The default (`render: panels`) draws each of the
+   four panel plans as its own picture on the GPU, with the hero's photo as the reference
+   image and no lettering; the Smash is also asked for a narration line per panel, which the
+   pages print under each picture. The other path (`render: page`) is the artifact's: a
+   **Nano Banana** API node inside the graph draws the whole page (panels, gutters, lettering)
+   from `page_prompt`, with the hero's photo as the first reference image and, from round 2,
+   the previous page as the second (both scaled to the page shape and batched, because the
+   node takes one image input).
 
 Verdict rule: every round LIVES except the final round, which DIES; the host can override the
 next round with the LIVES / DIES buttons on the screen. Rounds per game default to 2. Measured:

@@ -27,9 +27,10 @@ button:disabled{opacity:.4;cursor:default}
 h3{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin:10px 0 0}
 .page img{width:100%;display:block;border-radius:8px;background:#fff}
 .strip{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px;background:#fff;border-radius:8px;line-height:1.3}
+@media (max-width:480px){.strip{grid-template-columns:1fr}}
 .panel{position:relative;background:#fff;border:2px solid #111;border-radius:4px;overflow:hidden;color:#111}
 .panel img{width:100%;display:block;background:#fff}
-.panel .cap{font-size:12px;border-top:2px solid #111;padding:4px 6px;font-weight:600}
+.panel .cap{font-size:13px;border-top:2px solid #111;padding:6px 8px;font-weight:500;line-height:1.35}
 .panel .bub{font-size:12px;padding:2px 6px;font-style:italic}
 .panel .num{position:absolute;top:4px;left:4px;background:var(--acc);color:#1a1400;font-weight:800;border-radius:4px;padding:0 6px;font-size:12px;line-height:1.5}
 .fate{display:inline-block;color:#fff;font-weight:800;border-radius:4px;padding:1px 8px;font-size:13px;letter-spacing:.04em;margin-left:6px}
@@ -114,8 +115,7 @@ function pageHtml(cur,H){
   else if(cur.images){
     body='<div class=strip>'+cur.images.map((u,i)=>{const p=cur.panels[i]||{};
       return `<div class=panel><span class=num>${i+1}</span><img src="${u}" alt="panel ${i+1}">`+
-        (p.caption?`<div class=cap>${esc(p.caption)}</div>`:'')+
-        (p.bubbles||[]).map(b=>`<div class=bub>${b.type==='sfx'?'':esc(b.speaker||'')+': '}${esc(b.text)}</div>`).join('')+`</div>`;}).join('')+'</div>';
+        `<div class=cap>${esc(p.text||p.caption||'')}</div></div>`;}).join('')+'</div>';
   }
   return `<div class=title>Round ${cur.round}: ${esc(cur.title||'')}</div>`+body+`<div class=story>${esc(cur.story||'')}</div>`;
 }

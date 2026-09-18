@@ -23,11 +23,23 @@ def base_url():
     return f"https://{store.lower()}.public.blob.vercel-storage.com"
 
 
+def _open(req, timeout):
+    """urlopen with one retry on a transport error (this Mac's network drops the odd TLS
+    handshake); HTTP error responses are not retried."""
+    import socket, ssl, urllib.error
+    try:
+        return urllib.request.urlopen(req, timeout=timeout)
+    except (socket.timeout, ssl.SSLError, ConnectionError, urllib.error.URLError) as e:
+        if isinstance(e, urllib.error.HTTPError):
+            raise
+        return urllib.request.urlopen(req, timeout=timeout)
+
+
 def _call(method, url, data=None, headers=None, timeout=25):
     h = {"authorization": "Bearer " + _token(), "x-api-version": "7"}
     h.update(headers or {})
     req = urllib.request.Request(url, method=method, headers=h, data=data)
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with _open(req, timeout) as r:
         raw = r.read()
     return json.loads(raw or b"{}")
 

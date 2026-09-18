@@ -15,13 +15,25 @@ def _conf():
     return url, tok
 
 
+def _open(req, timeout):
+    """urlopen with one retry on a transport error (this Mac's network drops the odd TLS
+    handshake); HTTP error responses are not retried."""
+    import socket, ssl, urllib.error
+    try:
+        return urllib.request.urlopen(req, timeout=timeout)
+    except (socket.timeout, ssl.SSLError, ConnectionError, urllib.error.URLError) as e:
+        if isinstance(e, urllib.error.HTTPError):
+            raise
+        return urllib.request.urlopen(req, timeout=timeout)
+
+
 def _post(path, payload, timeout=15):
     url, tok = _conf()
     req = urllib.request.Request(url + path, method="POST",
                                  headers={"Authorization": "Bearer " + tok,
                                           "Content-Type": "application/json"},
                                  data=json.dumps(payload).encode())
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with _open(req, timeout) as r:
         return json.loads(r.read())
 
 

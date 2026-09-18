@@ -84,8 +84,10 @@ def setup(hero_name, total_rounds, photo_bytes, photo_type="image/png"):
 
 
 def smash(hero_name, round_number, total_rounds, verdict, hero_description, current_scene, previous_rounds,
-          continuity, kill_nouns, kill_verbs, save_nouns, save_verbs, previous_page=False):
-    """Prompt 2, every round: the story, the panel plans, the page prompt, continuity, next scene."""
+          continuity, kill_nouns, kill_verbs, save_nouns, save_verbs, previous_page=False, panels_exactly=4):
+    """Prompt 2, every round: the story, the panel plans, the page prompt, continuity, next scene.
+    `panels_exactly` pins the panel count (the pages lay them out 2 x 2) and asks for a
+    narration line per panel, printed under the picture instead of drawn into it."""
     final = round_number >= total_rounds
     join = lambda xs: ", ".join(xs) if xs else "(none)"
     lines = [f"THIS ROUND",
@@ -111,6 +113,15 @@ def smash(hero_name, round_number, total_rounds, verdict, hero_description, curr
     lines += ["", "KILL POOL (teams are secret from players, visible to you):",
               f"- Nouns: {join(kill_nouns)}", f"- Verbs: {join(kill_verbs)}", "",
               "SAVE POOL:", f"- Nouns: {join(save_nouns)}", f"- Verbs: {join(save_verbs)}"]
+    if panels_exactly:
+        lines += ["", "THIS GAME'S RENDER (overrides PANEL STRUCTURE counts and LETTERING):",
+                  f"- Plan EXACTLY {panels_exactly} panels this round, whatever the round number: fold the beats "
+                  f"into {panels_exactly} moments, the last one the OUTCOME.",
+                  "- Each panel is drawn as its own separate picture with NO lettering at all. Keep \"caption\" and "
+                  "\"bubbles\" in the JSON, but add to every panel object a field \"text\": one or two sentences, "
+                  "max 35 words, that narrate that panel to the audience like a storybook (what happens and what is "
+                  "said, in prose). The four \"text\" fields read in order must tell the whole story.",
+                  "- Still write \"page_prompt\"; it may be short."]
     text = claude(prompt_file("smash.txt") + "\n" + "\n".join(lines), "Go.", max_tokens=6000, timeout=120)
     got = parse_json(text)
     got["raw"] = text
