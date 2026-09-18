@@ -7,7 +7,7 @@ from urllib.parse import parse_qs, urlparse
 # Appended, not prepended: api/queue.py would otherwise shadow the standard
 # library's queue module for anything these handlers import.
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from _kill import advance, join, publish, reset, set_hero, start, state, word
+from _kill import advance, config, join, publish, reset, say, set_hero, setup, start, state
 
 SESS_OK = set("abcdefghijklmnopqrstuvwxyz0123456789-")
 
@@ -46,8 +46,12 @@ class handler(BaseHTTPRequestHandler):
         try:
             if action == "join":
                 return self._json(join(sess, body.get("voter"), body.get("name")))
-            if action == "word":
-                return self._json(word(sess, body.get("voter"), body.get("text")))
+            if action == "say":
+                return self._json(say(sess, body.get("voter"), body.get("noun"), body.get("verb")))
+            if action == "setup":
+                return self._json(setup(sess, force=bool(body.get("force"))))
+            if action == "config":
+                return self._json(config(sess, body.get("rounds"), body.get("render"), body.get("verdict")))
             if action == "start":
                 # Only the Go button on the screen page closes a round; nothing runs on its own.
                 if not body.get("submit"):

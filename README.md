@@ -8,27 +8,32 @@ code is honest, the edges are rough, and the interesting parts are the design no
 
 ## Kill or Save (the game for the demo)
 
-Open `kill-screen.html` on the projector and `kill.html` on every phone. One character,
-**Yoland**, drawn from a reference photo. Everyone who joins is put on a **secret side**, team
-Kill or team Save, and told only their own. Everybody drops **single words** into one shared
-pot; every phone and the projector show every word, and nobody can tell whose a word is or
-which side it serves. There is no timer: when the host presses **Go**, the pot is emptied into
-ONE job on the endpoint:
+Open `kill-screen.html` on the projector and `kill.html` on every phone. One hero, **Yoland**,
+from a reference photo. Everyone who joins is put on a **secret side**, team Kill or team Save,
+and told only their own. The prompts are Team 6's (`build/team_prompts.txt`, kept verbatim in
+`vercel-app/api/prompts/`), and the engine is what they describe:
 
-1. an **LLM node** (Gemini, running inside the graph) is told which words were Kill and which
-   were Save and writes a four-panel story in a fixed one-line format: panels 1 to 3 the Kill
-   side's things come at Yoland and the Save side's things rescue him, panel 4 the Kill side
-   gets him, comic-book style;
-2. five core **regex nodes** cut the cast and the four panel descriptions out of that text;
-3. four **sampler passes** draw the panels, each with Yoland's photo as a second reference
-   image next to the blank canvas, so the same person is in all four;
-4. four `SaveImage` nodes write the panels with each **caption as the file name**, which is
-   how the text gets back out of a job that only returns files.
+1. **Setup, once.** The text LLM (Claude, reached through Comfy's Router at
+   `api.comfy.org/proxy/anthropic/v1/messages` with a production key) reads the hero's photo
+   and writes a visual description plus round 1's scene: a place and an activity, no obstacle.
+   The screen page triggers it the first time it loads.
+2. **Answer.** Players read the scene and each lock in one **noun** and one **verb**, editable
+   until Go. Every phone and the projector show every word, alphabetically, with no names and
+   no sides.
+3. **Go** (no timer; the host presses it). The **Smash** call gets the Kill pool, the Save pool,
+   the story so far, the continuity and a fixed verdict, and returns JSON: title, story, one
+   plan per panel (visual, caption, bubbles), a single `page_prompt`, continuity and the next
+   round's scene. The next scene goes up at once, so people answer round 2 while page 1 draws.
+4. **Render, one Comfy job on the endpoint.** A **Nano Banana** API node inside the graph draws
+   the whole page (panels, gutters, lettering) from `page_prompt`, with the hero's photo as the
+   first reference image and, from round 2, the previous page as the second (both scaled to
+   the page shape and batched, because the node takes one image input). A fallback per
+   session draws each panel plan as its own picture on the GPU and lets the pages overlay the
+   captions and bubbles.
 
-The server copies the four pictures to the blob store and both pages stitch them into a 2 x 2
-strip with the captions. About 45 seconds a round. New words typed while it draws go into the
-next comic. `killctl.sh state|reset|hero|join|word|go` drives it from a shell; `hero` sets the
-main character's photo for a session (kept across resets).
+Verdict rule: every round LIVES except the final round, which DIES; the host can override the
+next round with the LIVES / DIES buttons on the screen. Rounds per game default to 2. Measured:
+Setup 5 s, Smash 40-55 s on Sonnet, page 10-15 s. `killctl.sh` drives it from a shell.
 
 ## The Room (the earlier modes)
 

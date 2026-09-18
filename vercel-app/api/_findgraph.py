@@ -563,6 +563,67 @@ def build_kill(kill_words, save_words, seed=1234, hero=True):
     return build_story([], seed=seed, hero=hero, prompt=kill_prompt(kill_words, save_words))
 
 
+# ---- Kill or Save, the team's prompts: one comic page per round, or four panels ---------------
+
+def build_page(page_prompt, seed=42, aspect="3:4", previous_page=False, pro=False):
+    """The artifact's render step as one job: a Nano Banana API node draws the whole comic page
+    (panels, gutters, lettering) from the Smash's page_prompt, with the hero's photo as the
+    first reference image and, from round 2, the previous page as the second. Both references
+    are scaled to the page's shape and batched, because the node takes one IMAGE input."""
+    w, h = (768, 1024) if aspect == "3:4" else (1024, 1024)
+    g = {}
+    g["2"] = {"class_type": "LoadImage", "_meta": {"title": "the hero's photo"}, "inputs": {"image": "hero.png"}}
+    g["3"] = {"class_type": "ImageScale", "_meta": {"title": "hero, page-shaped"},
+              "inputs": {"image": ["2", 0], "upscale_method": "lanczos", "width": w, "height": h, "crop": "center"}}
+    refs = ["3", 0]
+    if previous_page:
+        g["4"] = {"class_type": "LoadImage", "_meta": {"title": "the previous page"}, "inputs": {"image": "prev.png"}}
+        g["5"] = {"class_type": "ImageScale", "_meta": {"title": "previous page, page-shaped"},
+                  "inputs": {"image": ["4", 0], "upscale_method": "lanczos", "width": w, "height": h,
+                             "crop": "center"}}
+        g["6"] = {"class_type": "ImageBatch", "_meta": {"title": "hero + previous page"},
+                  "inputs": {"image1": ["3", 0], "image2": ["5", 0]}}
+        refs = ["6", 0]
+    if pro:
+        g["20"] = {"class_type": "GeminiImage2Node", "_meta": {"title": "draw the page (Nano Banana Pro)"},
+                   "inputs": {"prompt": page_prompt, "model": "gemini-3-pro-image-preview", "seed": seed % 2147483647,
+                              "aspect_ratio": aspect, "resolution": "1K", "response_modalities": "IMAGE",
+                              "images": refs}}
+    else:
+        g["20"] = {"class_type": "GeminiImageNode", "_meta": {"title": "draw the page (Nano Banana)"},
+                   "inputs": {"prompt": page_prompt, "model": "gemini-2.5-flash-image", "seed": seed % 2147483647,
+                              "aspect_ratio": aspect, "response_modalities": "IMAGE", "images": refs}}
+    g["31"] = {"class_type": "SaveImage", "_meta": {"title": "the page"},
+               "inputs": {"images": ["20", 0], "filename_prefix": "page"}}
+    return g
+
+
+def build_panels(prompts, seed=1234, hero=True):
+    """The fallback render: each panel plan drawn as its own picture on the GPU, with the hero's
+    photo as the reference. `prompts` are the finished per-panel prompts; no LLM in this job."""
+    g = {}
+    g["1"] = {"class_type": "EmptyImage", "_meta": {"title": "canvas"},
+              "inputs": {"width": PANEL_SIZE, "height": PANEL_SIZE, "batch_size": 1, "color": 8421504}}
+    extra = None
+    if hero:
+        g["2"] = {"class_type": "LoadImage", "_meta": {"title": "the main character"}, "inputs": {"image": "hero.png"}}
+        extra = {"image2": ["2", 0]}
+    g["3"] = {"class_type": "UNETLoader", "inputs": {"unet_name": UNET, "weight_dtype": "default"}}
+    g["4"] = {"class_type": "CLIPLoader", "inputs": {"clip_name": CLIP, "type": "qwen_image", "device": "default"}}
+    g["5"] = {"class_type": "VAELoader", "inputs": {"vae_name": VAE}}
+    g["6"] = {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["3", 0], "shift": 3.1}}
+    g["7"] = {"class_type": "CFGNorm", "inputs": {"model": ["6", 0], "strength": 1.0}}
+    g["8"] = {"class_type": "LoraLoaderModelOnly", "inputs": {"model": ["7", 0], "lora_name": LORA,
+              "strength_model": 1.0}}
+    for n, prompt in enumerate(prompts, 1):
+        b = n * 100
+        out = _chain(g, "1", prompt, MASH_NEG + ", blood, gore, grid, split frame", seed % 0xFFFFFFFF,
+                     tuple(str(b + i) for i in range(4, 12)), extra=extra)
+        g[str(30 + n)] = {"class_type": "SaveImage", "_meta": {"title": f"panel {n}"},
+                          "inputs": {"images": [out, 0], "filename_prefix": f"panel{n}"}}
+    return g
+
+
 # The single-thing graphs the older Find It page still posts.
 TYPED = graph(upload=False)
 UPLOAD = graph(upload=True)

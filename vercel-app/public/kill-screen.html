@@ -4,100 +4,125 @@
 :root{--bg:#0b0d12;--card:#161922;--ink:#eceff5;--mut:#8f97a6;--acc:#ffd23c;--ok:#5ddc97;--bad:#ff6b6b}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;overflow:hidden}
-.grid{display:grid;grid-template-columns:1fr 400px;gap:22px;height:100vh;padding:22px}
+.grid{display:grid;grid-template-columns:1fr 420px;gap:22px;height:100vh;padding:22px}
 .card{background:var(--card);border-radius:18px;padding:20px;overflow:hidden}
 .left{display:flex;flex-direction:column;gap:14px;min-height:0}
 .head{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
 h1{font-size:34px;margin:0;letter-spacing:.02em}
 .hero{display:flex;align-items:center;gap:10px;color:var(--mut);font-size:16px}
 .hero img{width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid var(--acc)}
-.ctl{margin-left:auto;display:flex;align-items:center;gap:14px}
+.ctl{margin-left:auto;display:flex;align-items:center;gap:10px}
 .ctl button{padding:12px 22px;border:0;border-radius:12px;background:var(--acc);color:#1a1400;font-size:19px;font-weight:800;cursor:pointer}
 .ctl button:disabled{opacity:.4;cursor:default}
+.ctl .v{background:#222736;color:var(--ink);font-size:15px;padding:10px 14px}
+.ctl .v.on.lives{background:#1f9d5b;color:#fff}.ctl .v.on.dies{background:#c0392b;color:#fff}
 .stage{flex:1;min-height:0;background:#000;border-radius:18px;overflow:hidden;position:relative;display:flex;align-items:center;justify-content:center}
-.stage .msg{color:var(--mut);font-size:22px;padding:30px;text-align:center;line-height:1.5}
+.stage img.page{max-width:100%;max-height:100%;object-fit:contain;display:block;background:#fff}
+.stage .msg{color:var(--mut);font-size:22px;padding:30px;text-align:center;line-height:1.5;max-width:900px}
 .strip{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:12px;width:100%;height:100%;padding:12px;background:#fff}
-.panel{position:relative;display:flex;flex-direction:column;min-height:0;min-width:0;background:#fff;border:3px solid #111;border-radius:6px;overflow:hidden;animation:pop .6s ease-out}
+.panel{position:relative;display:flex;flex-direction:column;min-height:0;min-width:0;background:#fff;border:3px solid #111;border-radius:6px;overflow:hidden;color:#111}
 .panel img{flex:1;min-height:0;width:100%;object-fit:contain;background:#fff}
-.panel .cap{font-size:16px;line-height:1.3;color:#111;border-top:3px solid #111;padding:6px 10px;font-weight:600}
+.panel .cap{font-size:16px;line-height:1.3;border-top:3px solid #111;padding:6px 10px;font-weight:600}
+.panel .bub{font-size:15px;padding:2px 10px;font-style:italic}
 .panel .num{position:absolute;top:8px;left:8px;background:var(--acc);color:#1a1400;font-weight:800;border-radius:6px;padding:0 8px;font-size:15px}
-@keyframes pop{from{transform:scale(.94);opacity:0}to{transform:scale(1);opacity:1}}
-.join{font-size:17px;color:var(--mut)}.join b{color:var(--ink)}
+.scene{background:#1d2130;border-left:5px solid var(--acc);border-radius:12px;padding:12px 16px;font-size:22px;line-height:1.35}
+.scene .n{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin-bottom:2px}
+.join{font-size:16px;color:var(--mut)}.join b{color:var(--ink)}
 h2{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin:0 0 8px}
 .right{display:flex;flex-direction:column;gap:18px;min-height:0}
-.right .card{flex:1;min-height:0;overflow:auto}
-.chips{display:flex;flex-wrap:wrap;gap:8px}
-.chip{background:#222736;border-radius:999px;padding:8px 16px;font-size:22px;font-weight:700}
-.busy{color:var(--acc);font-size:20px;margin-top:10px;line-height:1.4}
+.right .card{flex:0 0 auto}
+.right .card.grow{flex:1;min-height:0;overflow:auto}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.chip{background:#222736;border-radius:999px;padding:7px 14px;font-size:20px;font-weight:700}
+.busy{color:var(--acc);font-size:18px;margin-top:8px;line-height:1.4}
 .spin{display:inline-block;width:16px;height:16px;border:2px solid var(--mut);border-top-color:var(--acc);border-radius:50%;animation:s .8s linear infinite;vertical-align:-2px;margin-right:8px}
 @keyframes s{to{transform:rotate(360deg)}}
 .teams{display:flex;gap:14px;font-size:16px;color:var(--mut);flex-wrap:wrap}.teams b{color:var(--ink)}
-.was{font-size:15px;color:var(--mut);margin-top:10px}
+.title{font-size:20px;font-weight:800}.story{font-size:15px;color:var(--mut);margin-top:6px;line-height:1.45}
+.fate{display:inline-block;color:#fff;font-weight:800;border-radius:6px;padding:1px 10px;font-size:15px;letter-spacing:.04em;margin-left:8px;vertical-align:middle}
+.fate.lives{background:#1f9d5b}.fate.dies{background:#c0392b}
 </style>
 <div class=grid>
 <div class=left>
   <div class=head><h1>Kill or Save</h1>
     <span class=hero id=hero></span>
-    <span class=ctl><button id=go>Go</button></span>
+    <span class=ctl>
+      <span id=roundlbl style="color:var(--mut);font-size:16px">round 1 of 2</span>
+      <button class="v lives" id=vlives title="next round: Yoland lives">LIVES</button>
+      <button class="v dies" id=vdies title="next round: Yoland dies">DIES</button>
+      <button id=go>Go</button>
+    </span>
   </div>
   <div class=stage id=stage><div class=msg>starting up...</div></div>
+  <div class=scene id=scene><div class=n>scene</div><span id=scenetext>...</span></div>
   <div class=join>Join on your phone: <b id=url>-</b> &nbsp;&middot;&nbsp; <span id=note></span></div>
 </div>
 <div class=right>
-  <div class=card><h2 id=fhead>In the pot</h2>
-    <div class=chips id=feed></div>
+  <div class="card grow"><h2 id=fhead>In the pot</h2>
+    <h2 style="margin-top:6px">nouns</h2><div class=chips id=nouns></div>
+    <h2>verbs</h2><div class=chips id=verbs></div>
     <div class=busy id=busy></div>
-    <div class=was id=was></div>
   </div>
-  <div class=card style="flex:0 0 auto"><h2>Players</h2><div class=teams id=teams></div></div>
+  <div class=card id=story style="display:none"><div class=title id=title></div><div class=story id=storytext></div></div>
+  <div class=card><h2>Players</h2><div class=teams id=teams></div></div>
 </div>
 </div>
 <script>
 const $=s=>document.querySelector(s);
 const SESS=(new URLSearchParams(location.search).get('sess')||'main').toLowerCase().replace(/[^a-z0-9-]/g,'').slice(0,24)||'main';
-let PW='';
 $('#url').textContent=location.host+'/kill.html'+(SESS==='main'?'':'?sess='+SESS);
-let st=null, busy=false, shownStrip='', warmed=new Set();
+let st=null, busy=false, shown='', settingUp=false;
 
 async function api(body){
   const r=await fetch('/api/kill',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify(Object.assign({sess:SESS,password:PW},body))});
+    body:JSON.stringify(Object.assign({sess:SESS},body))});
   return r.json();
 }
-async function pull(){
-  const r=await fetch(`/api/kill?sess=${encodeURIComponent(SESS)}&password=${encodeURIComponent(PW)}`);
-  return r.json();
-}
+async function pull(){ const r=await fetch(`/api/kill?sess=${encodeURIComponent(SESS)}`); return r.json(); }
 function esc(s){return (s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));}
+
+function stageHtml(cur,H){
+  if(cur.image) return `<img class=page src="${cur.image}" alt="comic page ${cur.round}">`;
+  if(cur.images) return '<div class=strip>'+cur.images.map((u,i)=>{const p=cur.panels[i]||{};
+    return `<div class=panel><span class=num>${i+1}</span><img src="${u}" alt="panel ${i+1}">`+
+      (p.caption?`<div class=cap>${esc(p.caption)}</div>`:'')+
+      (p.bubbles||[]).map(b=>`<div class=bub>${b.type==='sfx'?'':esc(b.speaker||'')+': '}${esc(b.text)}</div>`).join('')+`</div>`;}).join('')+'</div>';
+  return '';
+}
 
 function render(){
   const H=esc(st.hero_name), d=st.drawing, cur=st.current;
+  const over = st.finished || st.round>st.total_rounds;
   const heroHtml = st.hero ? `<img src="${st.hero}" alt=""><span>starring ${H}</span>` : `<span>starring ${H}</span>`;
   if($('#hero').innerHTML!==heroHtml) $('#hero').innerHTML=heroHtml;
-  $('#fhead').textContent='In the pot for comic '+st.round+' - '+st.feed_count+' word'+(st.feed_count===1?'':'s');
-  $('#feed').innerHTML=st.feed.map(f=>`<span class=chip>${esc(f.word)}</span>`).join('')
-    || '<span style="color:var(--mut)">empty - phones, drop a word</span>';
-  $('#busy').innerHTML = d ? `<span class=spin></span>smashing ${d.words} words into comic ${d.round} - ${Math.max(0,Math.round((st.now-d.ms)/1000))}s` : '';
+  $('#roundlbl').textContent = over ? 'game over' : 'round '+st.round+' of '+st.total_rounds;
+  $('#vlives').className='v lives'+(st.next_verdict==='lives'?' on':''); $('#vdies').className='v dies'+(st.next_verdict==='dies'?' on':'');
+  $('#fhead').textContent = over ? 'The End' : 'In the pot for round '+st.round+' - '+st.answers+' answered';
+  $('#nouns').innerHTML=st.nouns.map(w=>`<span class=chip>${esc(w)}</span>`).join('')||'<span style="color:var(--mut)">none yet</span>';
+  $('#verbs').innerHTML=st.verbs.map(w=>`<span class=chip>${esc(w)}</span>`).join('')||'<span style="color:var(--mut)">none yet</span>';
+  $('#busy').innerHTML = busy ? '<span class=spin></span>the game master is writing the story and planning the panels...'
+    : d ? `<span class=spin></span>drawing page ${d.round}: ${esc(d.title||'')} - ${Math.max(0,Math.round((st.now-d.ms)/1000))}s` : '';
   $('#go').disabled = !st.can_start || busy;
-  $('#go').textContent = d ? 'drawing comic '+d.round+'...' : 'Go: smash '+st.feed_count+' word'+(st.feed_count===1?'':'s')+' into a comic';
-  $('#note').textContent = 'no timer: Go empties the pot into one four-panel comic, and '+H+' does not survive panel 4';
-  $('#teams').innerHTML = `<span>team Kill <b>${st.players.kill}</b></span><span>team Save <b>${st.players.save}</b></span><span>sides are secret; the storyteller knows</span>`;
-  $('#was').textContent = cur ? 'comic '+cur.round+' was made from: '+cur.all_words.join(', ') : '';
-  const key=cur ? cur.round+':'+(cur.captions||[]).join('|') : '';
-  if(key!==shownStrip){
-    shownStrip=key;
-    $('#stage').innerHTML = cur ? '<div class=strip>'+cur.panels.map((u,i)=>
-      `<div class=panel><span class=num>${i+1}</span><img src="${u}" alt="panel ${i+1}"><div class=cap>${esc((cur.captions||[])[i]||'')}</div></div>`).join('')+'</div>' : '';
-  }
+  $('#go').textContent = busy ? 'writing...' : d ? 'drawing page '+d.round+'...' : over ? 'game over' : !st.setup_done ? 'setting the scene...' : 'Go: smash '+st.answers+' answer'+(st.answers===1?'':'s');
+  $('#scenetext').textContent = over ? 'The End. Reset to play again.' : (st.scene || 'the game master is looking at the hero and setting the scene...');
+  $('#note').textContent = over ? '' : 'no timer - Go closes the pot. Next: '+H+' '+st.next_verdict+(st.verdict_override==='auto'?' (script)':' (host override)');
+  $('#teams').innerHTML = `<span>team Kill <b>${st.players.kill}</b></span><span>team Save <b>${st.players.save}</b></span><span>sides are secret; the game master knows</span>`;
+  if(cur){ $('#story').style.display=''; $('#title').innerHTML='Round '+cur.round+': '+esc(cur.title||'')+`<span class="fate ${cur.verdict}">${H} ${cur.verdict}</span>`; $('#storytext').textContent=cur.story||''; }
+  else $('#story').style.display='none';
+  const key=cur ? cur.round+':'+(cur.image||(cur.images||[]).join('|')) : '';
+  if(key!==shown){ shown=key; $('#stage').innerHTML = cur ? stageHtml(cur,H) : ''; }
   if(!cur){
-    $('#stage').innerHTML = `<div class=msg>${d ? 'the storyteller is writing four panels from <b>'+esc(d.all_words.join(', '))+'</b>, then drawing '+H+' into each...' : 'no comic yet - phones drop words, then press Go'}</div>`;
+    $('#stage').innerHTML = `<div class=msg>${d ? 'drawing page '+d.round+', <b>'+esc(d.title||'')+'</b>...' : busy ? 'the game master is writing...' : 'no page yet - phones answer the scene, then press Go'}</div>`;
   }
+  if(!st.setup_done && st.hero && !settingUp && !over){ settingUp=true; api({action:'setup'}).finally(()=>{settingUp=false; tick();}); }
 }
 $('#go').onclick=async()=>{
-  busy=true; $('#go').disabled=true;
+  busy=true; render();
   try{ const g=await api({action:'start',submit:true}); if(g.error||g.skipped){ $('#busy').textContent=g.error||g.skipped; } }catch(e){}
   busy=false; tick();
 };
+$('#vlives').onclick=()=>api({action:'config',verdict:'lives'}).then(tick);
+$('#vdies').onclick=()=>api({action:'config',verdict:'dies'}).then(tick);
 async function tick(){
   try{
     st=await pull();

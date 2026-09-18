@@ -1,52 +1,73 @@
-"""Kill or Save: one character (Yoland), two secret teams, one four-panel comic per Go.
+"""Kill or Save, on Team 6's prompts: one hero (Yoland), two secret teams, one comic page per round.
 
-Everyone who joins is put on team Kill or team Save and told only their own side. Everybody
-drops single words into one shared, anonymous feed; the room sees every word and nobody can
-tell whose it is or which side it serves. When the host presses Go, ONE job runs on the
-endpoint: an LLM node smashes both teams' words into a four-panel story (the LLM is told
-which words were Kill and which were Save; the last panel always gets Yoland), five regex
-nodes cut the cast and the four panel descriptions out of it, and four pictures are drawn
-with Yoland's photo as the reference. Each caption rides out as its picture's file name.
-The pot is emptied at Go; new words go into the next comic while this one draws.
+How a game runs (build/team_prompts.txt is the source; this is the engine it describes):
+  1. Setup, once: the text LLM (Claude, through Comfy's Router) reads the hero's photo and
+     writes a visual description plus round 1's scene: a place and an activity, no obstacle.
+  2. Players read the scene and each submit one NOUN and one VERB. Everyone sees every word;
+     nobody sees teams. Sides are secret, assigned on join.
+  3. Go (the host): the Smash call gets the KILL pool, the SAVE pool, the story so far and a
+     fixed verdict, and returns the story, the panel plans, one page_prompt, the continuity
+     and the next round's scene, as JSON.
+  4. Render, one Comfy job on the endpoint: a Nano Banana API node draws the whole page from
+     page_prompt with the hero's photo (and from round 2 the previous page) as references.
+     Fallback per session: the panel plans drawn as four separate pictures on the GPU, with the
+     lettering laid over them by the pages.
+  5. The next scene goes up at once, so players type for the next round while the page draws.
+
+Verdict rule: every round LIVES except the final round, which DIES; the host can override the
+next round's verdict from the screen. total_rounds is per session (default 2).
 
 State is one Redis hash per session, `ks:<sess>`:
-  p:<voter>  json {n: name, t: team, ms}
-  w:<id>     json {t: word, v: voter, r: round, ms}
-  round      the round the pot is filling right now
-  n:<r>      json {r, job, kill, save, ms, prompt, panels?, captions?, done_ms?, error?}
-plus `ks:<sess>:hero` (the photo URL, kept across resets) and two short locks.
+  p:<voter>       json {n: name, t: team, ms}
+  a:<r>:<voter>   json {noun, verb, ms}        one answer per player per round, editable until Go
+  round           the round the pot is filling right now (1-based)
+  setup           json {hero_description, scene}
+  scene           the current round's scene text
+  cont            json continuity carried into the current round
+  n:<r>           json the round record: the Smash's JSON plus job, verdict, pools, render, ms,
+                  done_ms / error, images
+plus `ks:<sess>:hero` (photo URL), `:rounds`, `:render` (page | pro | panels), `:verdict`
+(override for the next round), all kept across resets, and two short locks.
 """
 import json, os, random, re, secrets, sys, time
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import _blob, _kv
+import _blob, _kv, _llm
 from _core import check_password  # noqa: F401
-from _findcore import client, partner_key, poll, story_panels
-from _findgraph import HERO_NAME, build_kill
+from _findcore import _output, client, poll, story_panels
+from _findgraph import COMIC_STYLE, HERO_DRAW, HERO_NAME, build_page, build_panels
 
 TTL_S = 86_400
-LOCK_MS = 30_000
-STUCK_MS = 210_000
-ROUND_MS = 45_000            # an LLM call plus four 1024-square passes, for the countdown on screen
-WORDS_PER_PERSON = 8         # per round
+LOCK_MS = 120_000
+STUCK_MS = 240_000
+PAGE_MS = 40_000             # a Nano Banana page, for the countdown on screen
+PANELS_MS = 45_000
 TEAMS = ("kill", "save")
 NAME_RE = re.compile(r"^[a-z0-9]{6,12}$")
-WORD_RE = re.compile(r"[^a-z0-9'\-]+")
+WORD_RE = re.compile(r"[^a-z0-9' \-]+")
+RENDERS = ("page", "pro", "panels")
 
 
 def _k(sess):
     return f"ks:{sess}"
 
 
-# ---- the main character ----------------------------------------------------------------
+def _unlock(key):
+    """Best effort: a lock that cannot be released expires on its own, and a Redis hiccup here
+    must not turn a round that already started into an error for the caller."""
+    try:
+        _kv.cmd("DEL", key)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+# ---- per-session settings (kept across resets) ----------------------------------------------
 
 def get_hero(sess):
     return _kv.cmd("GET", f"ks:{sess}:hero") or None
 
 
 def set_hero(sess, data=None, clear=False):
-    """Store the main character's photo for this session. It lives outside the session's
-    picture folder, so a reset keeps it."""
     if clear:
         _kv.cmd("DEL", f"ks:{sess}:hero")
         return {"hero": None}
@@ -68,29 +89,70 @@ def set_hero(sess, data=None, clear=False):
     return {"hero": url}
 
 
-def _hero_bytes(sess):
-    url = get_hero(sess)
-    if not url:
-        return None
+def _fetch(url, timeout=30):
     import urllib.request
-    with urllib.request.urlopen(url, timeout=30) as r:
+    with urllib.request.urlopen(url, timeout=timeout) as r:
         return r.read()
 
 
-# ---- players and words ------------------------------------------------------------------
+def _hero_bytes(sess):
+    url = get_hero(sess)
+    return _fetch(url) if url else None
+
+
+def total_rounds(sess):
+    return int(_kv.cmd("GET", f"ks:{sess}:rounds") or 2)
+
+
+def render_mode(sess):
+    m = _kv.cmd("GET", f"ks:{sess}:render") or "page"
+    return m if m in RENDERS else "page"
+
+
+def verdict_override(sess):
+    v = _kv.cmd("GET", f"ks:{sess}:verdict") or ""
+    return v if v in ("lives", "dies") else ""
+
+
+def config(sess, rounds=None, render=None, verdict=None):
+    """Host settings: how many rounds, which render path, and a verdict override for the next round."""
+    if rounds is not None:
+        _kv.cmd("SET", f"ks:{sess}:rounds", str(max(1, min(6, int(rounds)))), "EX", TTL_S * 7)
+    if render is not None:
+        if render not in RENDERS:
+            raise ValueError("render is page, pro or panels")
+        _kv.cmd("SET", f"ks:{sess}:render", render, "EX", TTL_S * 7)
+    if verdict is not None:
+        v = str(verdict).lower()
+        if v in ("lives", "dies"):
+            _kv.cmd("SET", f"ks:{sess}:verdict", v, "EX", TTL_S)
+        else:
+            _kv.cmd("DEL", f"ks:{sess}:verdict")
+    return {"rounds": total_rounds(sess), "render": render_mode(sess), "verdict": verdict_override(sess) or "auto"}
+
+
+def verdict_for(sess, round_no):
+    return verdict_override(sess) or ("dies" if round_no >= total_rounds(sess) else "lives")
+
+
+# ---- players and answers ----------------------------------------------------------------------
 
 def _load(sess):
     h = _kv.hgetall(_k(sess))
-    players, words, rounds = {}, {}, {}
+    players, answers, rounds = {}, {}, {}
     for k, v in h.items():
         if k.startswith("p:"):
             players[k[2:]] = json.loads(v)
-        elif k.startswith("w:"):
-            words[k[2:]] = json.loads(v)
+        elif k.startswith("a:"):
+            _, r, voter = k.split(":", 2)
+            answers.setdefault(int(r), {})[voter] = json.loads(v)
         elif k.startswith("n:"):
             rounds[int(k[2:])] = json.loads(v)
-    current = int(h.get("round") or 1)
-    return players, words, rounds, current
+    meta = {"round": int(h.get("round") or 1),
+            "setup": json.loads(h["setup"]) if h.get("setup") else None,
+            "scene": h.get("scene") or "",
+            "cont": json.loads(h["cont"]) if h.get("cont") else None}
+    return players, answers, rounds, meta
 
 
 def join(sess, voter, name):
@@ -113,114 +175,202 @@ def join(sess, voter, name):
     return {"team": team, "name": name, "returning": False}
 
 
-def clean_word(text):
-    """One word: the first token typed, letters, digits, apostrophes and hyphens only."""
-    first = (text or "").strip().lower().split()
-    if not first:
-        return ""
-    return WORD_RE.sub("", first[0])[:20].strip("'-")
+def clean_word(text, limit=24):
+    """Letters, digits, spaces, apostrophes and hyphens; at most three words."""
+    t = " ".join((text or "").strip().lower().split()[:3])
+    return WORD_RE.sub("", t)[:limit].strip("'- ")
 
 
-def word(sess, voter, text):
+def say(sess, voter, noun=None, verb=None):
+    """One noun and one verb per player per round; either can be changed until Go."""
     if not NAME_RE.match(voter or ""):
         raise ValueError("bad voter")
-    w = clean_word(text)
-    if not w:
-        raise ValueError("type one word")
-    players, words, _, current = _load(sess)
+    players, answers, _, meta = _load(sess)
     if voter not in players:
         raise ValueError("join first")
-    mine = [x for x in words.values() if x["v"] == voter and x["r"] == current]
-    if len(mine) >= WORDS_PER_PERSON:
-        raise ValueError(f"{WORDS_PER_PERSON} words per round each, that is the cap")
-    if any(x["t"] == w for x in words.values() if x["r"] == current):
-        return {"word": w, "round": current, "dup": True}
-    wid = f"{int(time.time() * 1000)}-{secrets.token_hex(2)}"
-    rec = {"t": w, "v": voter, "r": current, "ms": int(time.time() * 1000)}
-    _kv.pipe([["HSET", _k(sess), f"w:{wid}", json.dumps(rec)], ["EXPIRE", _k(sess), TTL_S]])
-    return {"word": w, "round": current, "mine": len(mine) + 1}
+    r = meta["round"]
+    cur = answers.get(r, {}).get(voter, {"noun": "", "verb": ""})
+    if noun is not None:
+        cur["noun"] = clean_word(noun)
+    if verb is not None:
+        cur["verb"] = clean_word(verb)
+    if not cur["noun"] and not cur["verb"]:
+        raise ValueError("type a noun or a verb")
+    cur["ms"] = int(time.time() * 1000)
+    _kv.pipe([["HSET", _k(sess), f"a:{r}:{voter}", json.dumps(cur)], ["EXPIRE", _k(sess), TTL_S]])
+    return {"round": r, "noun": cur["noun"], "verb": cur["verb"]}
 
 
-# ---- the shared view ----------------------------------------------------------------------
+# ---- the shared view --------------------------------------------------------------------------
+
+def _pools(players, answers_r):
+    pools = {t: {"nouns": [], "verbs": []} for t in TEAMS}
+    for voter, a in answers_r.items():
+        t = players.get(voter, {}).get("t")
+        if t not in pools:
+            continue
+        if a.get("noun"):
+            pools[t]["nouns"].append(a["noun"])
+        if a.get("verb"):
+            pools[t]["verbs"].append(a["verb"])
+    return pools
+
 
 def state(sess, voter=None):
     now = int(time.time() * 1000)
-    players, words, rounds, current = _load(sess)
+    players, answers, rounds, meta = _load(sess)
     base = _blob.base_url()
-    feed = sorted((w for w in words.values() if w["r"] == current), key=lambda w: w["ms"])
-    comics, drawing = [], None
-    for r in sorted(rounds):
-        rec = rounds[r]
-        n_words = len(rec.get("kill", [])) + len(rec.get("save", []))
-        row = {"round": r, "ms": rec["ms"], "words": n_words,
-               "all_words": sorted(rec.get("kill", []) + rec.get("save", []))}
+    total = total_rounds(sess)
+    r = meta["round"]
+    mine = answers.get(r, {}).get(voter) if voter else None
+    this = answers.get(r, {})
+    # The feed is anonymous: words only, in alphabetical order so nothing leaks from timing.
+    nouns = sorted(a["noun"] for a in this.values() if a.get("noun"))
+    verbs = sorted(a["verb"] for a in this.values() if a.get("verb"))
+    pages, drawing = [], None
+    for n in sorted(rounds):
+        rec = rounds[n]
+        row = {"round": n, "verdict": rec["verdict"], "title": rec.get("title"), "story": rec.get("story"),
+               "outcome": rec.get("outcome"), "layout": rec.get("layout"), "panels": rec.get("panels") or [],
+               "render": rec.get("render"), "ms": rec["ms"], "scene": rec.get("scene"),
+               "words": rec.get("kill", {}).get("nouns", []) + rec.get("kill", {}).get("verbs", [])
+                        + rec.get("save", {}).get("nouns", []) + rec.get("save", {}).get("verbs", [])}
+        row["words"] = sorted(row["words"])
         if rec.get("error"):
             row["state"] = "failed"
             row["error"] = rec["error"]
         elif rec.get("done_ms"):
             row["state"] = "done"
-            row["panels"] = [f"{base}/ks/{sess}/c{r}-p{n}.png" for n in range(1, rec["panels"] + 1)]
-            row["captions"] = rec.get("captions") or []
+            if rec.get("render") == "panels":
+                row["images"] = [f"{base}/ks/{sess}/r{n}-p{i}.png" for i in range(1, rec.get("images", 0) + 1)]
+            else:
+                row["image"] = f"{base}/ks/{sess}/page{n}.png"
         else:
             row["state"] = "drawing"
-            row["eta_ms"] = max(0, rec["ms"] + ROUND_MS - now)
+            row["eta_ms"] = max(0, rec["ms"] + (PANELS_MS if rec.get("render") == "panels" else PAGE_MS) - now)
             if now - rec["ms"] < STUCK_MS:
                 drawing = row
-        comics.append(row)
-    done = [c for c in comics if c["state"] == "done"]
+        pages.append(row)
+    done = [p for p in pages if p["state"] == "done"]
+    finished = len(rounds) >= total and all(rec.get("done_ms") or rec.get("error") for rec in rounds.values())
     me = players.get(voter) if voter else None
     return {"now": now, "sess": sess, "hero": get_hero(sess), "hero_name": HERO_NAME,
-            "round": current,
-            "feed": [{"id": k, "word": v["t"]} for k, v in
-                     sorted(words.items(), key=lambda kv: kv[1]["ms"]) if v["r"] == current],
-            "feed_count": len(feed),
-            "my_words": [w["t"] for w in feed if voter and w["v"] == voter],
+            "hero_description": (meta["setup"] or {}).get("hero_description"),
+            "setup_done": bool(meta["setup"]), "scene": meta["scene"],
+            "round": r, "total_rounds": total, "final": r >= total, "finished": finished,
+            "next_verdict": verdict_for(sess, r), "verdict_override": verdict_override(sess) or "auto",
+            "render": render_mode(sess),
+            "nouns": nouns, "verbs": verbs, "answers": len(this),
+            "mine": {"noun": mine.get("noun", ""), "verb": mine.get("verb", "")} if mine else None,
             "players": {t: sum(1 for p in players.values() if p["t"] == t) for t in TEAMS},
             "me": {"team": me["t"], "name": me["n"]} if me else None,
-            "comics": comics, "current": done[-1] if done else None, "history": done[-6:],
-            "drawing": drawing,
-            "can_start": drawing is None and bool(feed),
-            "words_per_person": WORDS_PER_PERSON}
+            "pages": pages, "current": done[-1] if done else None, "drawing": drawing,
+            "can_start": drawing is None and bool(this) and r <= total and bool(meta["setup"]) and not finished}
 
 
-# ---- a round --------------------------------------------------------------------------------
+# ---- the three calls --------------------------------------------------------------------------
+
+def setup(sess, force=False):
+    """Prompt 1: read the photo, write the hero description and round 1's scene. Idempotent."""
+    _, _, _, meta = _load(sess)
+    if meta["setup"] and not force:
+        return {"setup": meta["setup"], "scene": meta["scene"], "cached": True}
+    if _kv.cmd("SET", f"ks:{sess}:setuplock", "held", "NX", "PX", LOCK_MS) is None:
+        return {"skipped": "setup is already running"}
+    try:
+        photo = _hero_bytes(sess)
+        if not photo:
+            raise ValueError("no hero photo for this session yet (killctl.sh hero photo.png)")
+        kind = "image/png" if photo[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
+        got = _llm.setup(HERO_NAME, total_rounds(sess), photo, kind)
+        if not got["scene"] or not got["hero_description"]:
+            raise RuntimeError("setup came back incomplete: " + got["raw"][:200])
+        rec = {"hero_description": got["hero_description"], "scene": got["scene"]}
+        _kv.pipe([["HSET", _k(sess), "setup", json.dumps(rec)], ["HSET", _k(sess), "scene", got["scene"]],
+                  ["HSET", _k(sess), "round", "1"], ["EXPIRE", _k(sess), TTL_S]])
+        return {"setup": rec, "scene": got["scene"], "cached": False}
+    finally:
+        _unlock(f"ks:{sess}:setuplock")
+
+
+def _panel_prompts(hero_description, cont, plan):
+    look = (cont or {}).get("hero_look") or ""
+    carrying = (cont or {}).get("hero_carrying") or ""
+    who = f"The main character is {HERO_NAME}, {hero_description}"
+    if look:
+        who += f"; {look}"
+    if carrying:
+        who += f"; carrying {carrying}"
+    return [("One single scene. " + HERO_DRAW + who + ". " + str(p.get("visual", ""))[:600] + COMIC_STYLE)
+            for p in plan]
+
 
 def start(sess):
-    """Close the pot into one job. New words go to the next comic while this one draws."""
+    """Go: close the pot, run the Smash, submit the render job, and open the next round."""
     if _kv.cmd("SET", f"ks:{sess}:lock", "held", "NX", "PX", LOCK_MS) is None:
         return {"skipped": "someone else just pressed Go"}
     try:
         st = state(sess)
         if st["drawing"]:
-            return {"skipped": "a comic is still being drawn"}
-        if not st["feed"]:
+            return {"skipped": "a page is still being drawn"}
+        if not st["setup_done"]:
+            setup(sess)
+            st = state(sess)
+        if st["finished"] or st["round"] > st["total_rounds"]:
+            return {"skipped": "the game is over; reset to play again"}
+        if not st["answers"]:
             return {"skipped": "no words in the pot yet"}
-        if not partner_key():
-            raise RuntimeError("server is missing COMFY_PARTNER_API_KEY (the LLM node needs a production key)")
-        players, words, rounds, current = _load(sess)
-        feed = sorted((w for w in words.values() if w["r"] == current), key=lambda w: w["ms"])
-        kill = [w["t"] for w in feed if players.get(w["v"], {}).get("t") == "kill"]
-        save = [w["t"] for w in feed if players.get(w["v"], {}).get("t") == "save"]
+        players, answers, rounds, meta = _load(sess)
+        r, total = meta["round"], st["total_rounds"]
+        pools = _pools(players, answers.get(r, {}))
+        verdict = verdict_for(sess, r)
+        previous = [{"round": n, "verdict": rounds[n]["verdict"].upper(), "outcome": rounds[n].get("outcome", "")}
+                    for n in sorted(rounds)]
+        prev_done = [n for n in sorted(rounds) if rounds[n].get("done_ms") and rounds[n].get("render") != "panels"]
+        render = render_mode(sess)
+        use_prev = render != "panels" and bool(prev_done)
+        plan = _llm.smash(HERO_NAME, r, total, verdict.upper(), meta["setup"]["hero_description"], meta["scene"],
+                          previous, meta["cont"], pools["kill"]["nouns"], pools["kill"]["verbs"],
+                          pools["save"]["nouns"], pools["save"]["verbs"], previous_page=use_prev)
+        panels = plan.get("panels") or []
+        if not panels or not plan.get("page_prompt"):
+            raise RuntimeError("the smash came back without panels or a page prompt: " + plan.get("raw", "")[:200])
         seed = random.randrange(1, 2 ** 31)
-        hero = _hero_bytes(sess)
-        graph, prompt = build_kill(kill, save, seed=seed, hero=bool(hero))
         c = client()
-        wf = c.workflows.from_json(graph)
-        if hero:
+        hero = _hero_bytes(sess)
+        if render == "panels":
+            g = build_panels(_panel_prompts(meta["setup"]["hero_description"], meta["cont"], panels), seed=seed,
+                             hero=bool(hero))
+        else:
+            g = build_page(plan["page_prompt"], seed=seed, previous_page=use_prev, pro=(render == "pro"))
+        wf = c.workflows.from_json(g)
+        if hero and "2" in g:
             wf.set_input("2", "image", c.assets.from_bytes(hero, filename="hero.png"))
-        job = c.submit(wf, api_key=partner_key())
-        rec = {"r": current, "job": job.id, "kill": kill, "save": save,
-               "ms": int(time.time() * 1000), "seed": seed, "prompt": prompt}
-        _kv.pipe([["HSET", _k(sess), f"n:{current}", json.dumps(rec)],
-                  ["HSET", _k(sess), "round", str(current + 1)],
-                  ["EXPIRE", _k(sess), TTL_S]])
-        return {"round": current, "job": job.id, "kill": len(kill), "save": len(save)}
+        if use_prev:
+            prev = _fetch(f"{_blob.base_url()}/ks/{sess}/page{prev_done[-1]}.png")
+            wf.set_input("4", "image", c.assets.from_bytes(prev, filename="prev.png"))
+        job = c.submit(wf, api_key=_llm.partner_key())
+        rec = {"r": r, "job": job.id, "verdict": verdict, "render": render, "ms": int(time.time() * 1000),
+               "seed": seed, "scene": meta["scene"], "kill": pools["kill"], "save": pools["save"],
+               "title": plan.get("title"), "story": plan.get("story"), "outcome": plan.get("outcome"),
+               "layout": plan.get("layout"), "panels": panels, "page_prompt": plan.get("page_prompt"),
+               "continuity": plan.get("continuity") or {}, "next_scene": plan.get("next_scene"),
+               "n_panels": len(panels)}
+        cmds = [["HSET", _k(sess), f"n:{r}", json.dumps(rec)],
+                ["HSET", _k(sess), "round", str(r + 1)],
+                ["HSET", _k(sess), "cont", json.dumps(rec["continuity"])],
+                ["HSET", _k(sess), "scene", plan.get("next_scene") or ""],
+                ["DEL", f"ks:{sess}:verdict"],
+                ["EXPIRE", _k(sess), TTL_S]]
+        _kv.pipe(cmds)
+        return {"round": r, "job": job.id, "verdict": verdict, "title": rec["title"], "panels": len(panels),
+                "render": render, "next_scene": rec["next_scene"]}
     finally:
-        _kv.cmd("DEL", f"ks:{sess}:lock")
+        _unlock(f"ks:{sess}:lock")
 
 
 def publish(sess, round_no):
-    """Once the endpoint is finished, copy the four panels into the blob store and keep the captions."""
+    """Once the endpoint is finished, copy the page (or the panels) into the blob store."""
     raw = _kv.cmd("HGET", _k(sess), f"n:{int(round_no)}")
     if not raw:
         return {"state": "error", "error": "no such round"}
@@ -229,45 +379,41 @@ def publish(sess, round_no):
         return {"state": "done" if rec.get("done_ms") else "error", "round": rec["r"]}
     got = poll(rec["job"])
     if got.get("state") == "error":
-        rec["error"] = str(got.get("error"))[:160]
+        rec["error"] = str(got.get("error"))[:200]
         _kv.cmd("HSET", _k(sess), f"n:{rec['r']}", json.dumps(rec))
         return {"state": "error", "error": rec["error"]}
     if got.get("state") != "done":
         return got
-    import urllib.request
-    panels = story_panels(rec["job"])
-    if not panels:
-        rec["error"] = "the job finished without any panels"
-        _kv.cmd("HSET", _k(sess), f"n:{rec['r']}", json.dumps(rec))
-        return {"state": "error", "error": rec["error"]}
-    for n, p in enumerate(panels, 1):
-        with urllib.request.urlopen(p["url"], timeout=60) as r:
-            _blob.put(f"ks/{sess}/c{rec['r']}-p{n}.png", r.read(), "image/png")
-    rec["panels"] = len(panels)
-    rec["captions"] = [p["caption"] for p in panels]
+    if rec.get("render") == "panels":
+        panels = story_panels(rec["job"])
+        for i, p in enumerate(panels, 1):
+            _blob.put(f"ks/{sess}/r{rec['r']}-p{i}.png", _fetch(p["url"], 60), "image/png")
+        rec["images"] = len(panels)
+    else:
+        out = _output(client().jobs.get(rec["job"]), "31")
+        _blob.put(f"ks/{sess}/page{rec['r']}.png", _fetch(str(out.get_download_url().url), 60), "image/png")
     rec["done_ms"] = int(time.time() * 1000)
     _kv.pipe([["HSET", _k(sess), f"n:{rec['r']}", json.dumps(rec)], ["EXPIRE", _k(sess), TTL_S]])
-    return {"state": "done", "round": rec["r"], "captions": rec["captions"]}
+    return {"state": "done", "round": rec["r"]}
 
 
 def advance(sess):
-    """Move any finished round along. Every browser calls this while a comic is in flight; a
-    lock keeps it to one publisher at a time."""
     st = state(sess)
-    live = [c for c in st["comics"] if c["state"] == "drawing"]
+    live = [p for p in st["pages"] if p["state"] == "drawing"]
     if not live:
         return {"did": []}
-    if _kv.cmd("SET", f"ks:{sess}:publock", "held", "NX", "PX", LOCK_MS) is None:
+    if _kv.cmd("SET", f"ks:{sess}:publock", "held", "NX", "PX", 30_000) is None:
         return {"did": [], "skipped": "another publisher is on it"}
     try:
-        return {"did": [{"round": c["round"], **publish(sess, c["round"])} for c in live]}
+        return {"did": [{"round": p["round"], **publish(sess, p["round"])} for p in live]}
     finally:
-        _kv.cmd("DEL", f"ks:{sess}:publock")
+        _unlock(f"ks:{sess}:publock")
 
 
 def reset(sess):
-    """Wipe the game: players, words, comics, pictures. The hero photo stays."""
-    keys = [_k(sess)] + [k for k in _kv.scan(f"ks:{sess}:*") if not k.endswith(":hero")]
+    """Wipe the game: players, answers, setup, pages. The hero photo and the settings stay."""
+    keep = (":hero", ":rounds", ":render")
+    keys = [_k(sess)] + [k for k in _kv.scan(f"ks:{sess}:*") if not k.endswith(keep)]
     if keys:
         _kv.cmd("DEL", *keys)
     urls = [b["url"] for b in _blob.listing(f"ks/{sess}/")]
