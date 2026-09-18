@@ -24,18 +24,24 @@ and told only their own. The prompts are Team 6's (`build/team_prompts.txt`, kep
    the story so far, the continuity and a fixed verdict, and returns JSON: title, story, one
    plan per panel (visual, caption, bubbles), a single `page_prompt`, continuity and the next
    round's scene. The next scene goes up at once, so people answer round 2 while page 1 draws.
-4. **Render, one Comfy job on the endpoint.** The default (`render: panels`) draws each of the
-   four panel plans as its own picture on the GPU, with the hero's photo as the reference
-   image and no lettering; the Smash is also asked for a narration line per panel, which the
-   pages print under each picture. The other path (`render: page`) is the artifact's: a
-   **Nano Banana** API node inside the graph draws the whole page (panels, gutters, lettering)
-   from `page_prompt`, with the hero's photo as the first reference image and, from round 2,
-   the previous page as the second (both scaled to the page shape and batched, because the
-   node takes one image input).
+4. **Render, one Comfy job on the endpoint.** A **Nano Banana** API node inside the graph draws
+   the whole page in one shot from `page_prompt`: four panels in a 2 x 2 grid on a square page,
+   with the hero's photo as the first reference image and, from round 2, the previous page as
+   the second (both scaled to the page shape and batched, because the node takes one image
+   input). One generation for the whole page is what keeps the hero identical across panels;
+   drawing each panel as its own job made him drift. **No lettering is drawn**: the four
+   narration lines the Smash writes are printed beside the page instead. The image model adds a
+   fifth frame when it can, so the server restates the panel count at the end of the prompt.
+   A per-session fallback (`render: panels`) still draws each panel plan as its own GPU picture.
 
-Verdict rule: every round LIVES except the final round, which DIES; the host can override the
-next round with the LIVES / DIES buttons on the screen. Rounds per game default to 2. Measured:
-Setup 5 s, Smash 40-55 s on Sonnet, page 10-15 s. `killctl.sh` drives it from a shell.
+The Smash prompt carries a **PANEL FLOW** section added on top of the artifact's: the beats are
+a chain, anything that acts must be visible in the panel before, each panel ends on a hook the
+next one pays off, and screen direction and object positions hold across the page.
+
+Verdict rule: every round LIVES except the final round, which DIES; the host can override it
+from the shell. Neither page shows the verdict, so the audience cannot guess what is coming.
+Rounds per game default to 2. Measured: Setup 5 s, Smash 40-55 s on Sonnet, page 15-20 s.
+`killctl.sh` drives it from a shell.
 
 ## The Room (the earlier modes)
 

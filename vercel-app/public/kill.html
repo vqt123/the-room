@@ -39,6 +39,9 @@ h3{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)
 .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--mut);border-top-color:var(--ink);border-radius:50%;animation:s .8s linear infinite;vertical-align:-2px;margin-right:8px}
 @keyframes s{to{transform:rotate(360deg)}}
 .story{font-size:14px;color:var(--ink);margin-top:8px;line-height:1.5}
+.beats{margin:10px 0 0;padding:0;list-style:none;counter-reset:b}
+.beats li{counter-increment:b;position:relative;padding:7px 0 7px 28px;border-top:1px solid #222736;font-size:14px;line-height:1.45}
+.beats li:before{content:counter(b);position:absolute;left:0;top:7px;width:20px;height:20px;border-radius:5px;background:var(--acc);color:#1a1400;font-weight:800;font-size:12px;text-align:center;line-height:20px}
 .title{font-size:18px;font-weight:800;margin-top:10px}
 </style>
 <div class=wrap>
@@ -117,7 +120,10 @@ function pageHtml(cur,H){
       return `<div class=panel><span class=num>${i+1}</span><img src="${u}" alt="panel ${i+1}">`+
         `<div class=cap>${esc(p.text||p.caption||'')}</div></div>`;}).join('')+'</div>';
   }
-  return `<div class=title>Round ${cur.round}: ${esc(cur.title||'')}</div>`+body+`<div class=story>${esc(cur.story||'')}</div>`;
+  const beats=(cur.panels||[]).map(p=>p.text||p.caption||'').filter(Boolean);
+  const told = beats.length ? `<ol class=beats>${beats.map(t=>`<li>${esc(t)}</li>`).join('')}</ol>`
+    : `<div class=story>${esc(cur.story||'')}</div>`;
+  return `<div class=title>Round ${cur.round}: ${esc(cur.title||'')}</div>`+body+told;
 }
 
 function render(){

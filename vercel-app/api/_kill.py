@@ -40,8 +40,12 @@ from _findgraph import COMIC_STYLE, HERO_DRAW, HERO_NAME, build_page, build_pane
 TTL_S = 86_400
 LOCK_MS = 120_000
 STUCK_MS = 240_000
-PAGE_MS = 40_000             # a Nano Banana page, for the countdown on screen
-PANELS_MS = 45_000
+PAGE_MS = 25_000             # a Nano Banana page, for the countdown on screen
+PANELS_MS = 55_000
+# The image model will happily draw a fifth frame if the page leaves room, so the count is
+# restated by us at the end of the prompt rather than trusted to the writer (seen 2026-09-18).
+PAGE_TAIL = (" The page has exactly four panels in two rows of two, all the same size. Do not draw a fifth panel, "
+             "an inset panel, a repeated panel, or a title banner.")
 TEAMS = ("kill", "save")
 NAME_RE = re.compile(r"^[a-z0-9]{6,12}$")
 WORD_RE = re.compile(r"[^a-z0-9' \-]+")
@@ -106,7 +110,7 @@ def total_rounds(sess):
 
 
 def render_mode(sess):
-    m = _kv.cmd("GET", f"ks:{sess}:render") or "panels"
+    m = _kv.cmd("GET", f"ks:{sess}:render") or "page"
     return m if m in RENDERS else "page"
 
 
@@ -307,15 +311,16 @@ def setup(sess, force=False):
 
 
 def _panel_prompts(hero_description, cont, plan):
+    """The per-panel prompts: the hero's current look and what the panel shows. The hero clause
+    itself (photo / character sheet) is added by the graph builder."""
     look = (cont or {}).get("hero_look") or ""
     carrying = (cont or {}).get("hero_carrying") or ""
-    who = f"The main character is {HERO_NAME}, {hero_description}"
+    who = f"{HERO_NAME} is {hero_description}"
     if look:
-        who += f"; {look}"
+        who += f"; right now {look}"
     if carrying:
         who += f"; carrying {carrying}"
-    return [("One single scene. " + HERO_DRAW + who + ". " + str(p.get("visual", ""))[:600] + COMIC_STYLE)
-            for p in plan]
+    return [(who + ". What happens: " + str(p.get("visual", ""))[:600] + COMIC_STYLE) for p in plan]
 
 
 def start(sess):
@@ -345,20 +350,20 @@ def start(sess):
         plan = _llm.smash(HERO_NAME, r, total, verdict.upper(), meta["setup"]["hero_description"], meta["scene"],
                           previous, meta["cont"], pools["kill"]["nouns"], pools["kill"]["verbs"],
                           pools["save"]["nouns"], pools["save"]["verbs"], previous_page=use_prev,
-                          panels_exactly=4 if render == "panels" else 0)
+                          panels_exactly=4)
         panels = plan.get("panels") or []
         if not panels or (render != "panels" and not plan.get("page_prompt")):
             raise RuntimeError("the smash came back without panels or a page prompt: " + plan.get("raw", "")[:200])
-        if render == "panels":
-            panels = panels[:4]
+        panels = panels[:4]
         seed = random.randrange(1, 2 ** 31)
         c = client()
         hero = _hero_bytes(sess)
         if render == "panels":
             g = build_panels(_panel_prompts(meta["setup"]["hero_description"], meta["cont"], panels), seed=seed,
-                             hero=bool(hero))
+                             hero=bool(hero), look=meta["setup"]["hero_description"])
         else:
-            g = build_page(plan["page_prompt"], seed=seed, previous_page=use_prev, pro=(render == "pro"))
+            g = build_page(plan["page_prompt"] + PAGE_TAIL, seed=seed, previous_page=use_prev,
+                           pro=(render == "pro"))
         wf = c.workflows.from_json(g)
         if hero and "2" in g:
             wf.set_input("2", "image", c.assets.from_bytes(hero, filename="hero.png"))

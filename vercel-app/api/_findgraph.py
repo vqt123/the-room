@@ -565,12 +565,12 @@ def build_kill(kill_words, save_words, seed=1234, hero=True):
 
 # ---- Kill or Save, the team's prompts: one comic page per round, or four panels ---------------
 
-def build_page(page_prompt, seed=42, aspect="3:4", previous_page=False, pro=False):
+def build_page(page_prompt, seed=42, aspect="1:1", previous_page=False, pro=False):
     """The artifact's render step as one job: a Nano Banana API node draws the whole comic page
     (panels, gutters, lettering) from the Smash's page_prompt, with the hero's photo as the
     first reference image and, from round 2, the previous page as the second. Both references
     are scaled to the page's shape and batched, because the node takes one IMAGE input."""
-    w, h = (768, 1024) if aspect == "3:4" else (1024, 1024)
+    w, h = (768, 1024) if aspect == "3:4" else (1024, 1024)   # references are scaled to the page shape
     g = {}
     g["2"] = {"class_type": "LoadImage", "_meta": {"title": "the hero's photo"}, "inputs": {"image": "hero.png"}}
     g["3"] = {"class_type": "ImageScale", "_meta": {"title": "hero, page-shaped"},
@@ -598,16 +598,25 @@ def build_page(page_prompt, seed=42, aspect="3:4", previous_page=False, pro=Fals
     return g
 
 
-def build_panels(prompts, seed=1234, hero=True):
-    """The fallback render: each panel plan drawn as its own picture on the GPU, with the hero's
-    photo as the reference. `prompts` are the finished per-panel prompts; no LLM in this job."""
+SHEET_PROMPT = ("A character model sheet of one person, standing, full body, front view, relaxed neutral pose, "
+                "arms at the sides, looking at the viewer, on a plain flat white background. The person is exactly "
+                "the person in the second picture, drawn as a cartoon character with the same face, hair, glasses "
+                "and clothes: {look}. Rich detail, cartoon comic-book illustration, thin black outlines, flat bright "
+                "colours, no text, no watermark, no border.")
+SHEET_DRAW = ("The main character is the cartoon character in the second picture, drawn EXACTLY like it: the same "
+              "face, the same hair, the same round glasses, the same jacket and shirt, the same body proportions and "
+              "the same drawing style; the third picture is the photo that character was drawn from. ")
+
+
+def build_panels(prompts, seed=1234, hero=True, look="", sheet=True):
+    """The panel render: each panel plan drawn as its own picture on the GPU. With `sheet`, the
+    job first draws one character sheet of the hero from the photo (a fixed cartoon design), and
+    every panel then copies that sheet (second reference) with the photo as the third, so the
+    hero is the same drawing in all four instead of being re-invented from the photo each
+    time. `prompts` are the finished per-panel prompts without the hero clause; it is added here."""
     g = {}
     g["1"] = {"class_type": "EmptyImage", "_meta": {"title": "canvas"},
               "inputs": {"width": PANEL_SIZE, "height": PANEL_SIZE, "batch_size": 1, "color": 8421504}}
-    extra = None
-    if hero:
-        g["2"] = {"class_type": "LoadImage", "_meta": {"title": "the main character"}, "inputs": {"image": "hero.png"}}
-        extra = {"image2": ["2", 0]}
     g["3"] = {"class_type": "UNETLoader", "inputs": {"unet_name": UNET, "weight_dtype": "default"}}
     g["4"] = {"class_type": "CLIPLoader", "inputs": {"clip_name": CLIP, "type": "qwen_image", "device": "default"}}
     g["5"] = {"class_type": "VAELoader", "inputs": {"vae_name": VAE}}
@@ -615,9 +624,22 @@ def build_panels(prompts, seed=1234, hero=True):
     g["7"] = {"class_type": "CFGNorm", "inputs": {"model": ["6", 0], "strength": 1.0}}
     g["8"] = {"class_type": "LoraLoaderModelOnly", "inputs": {"model": ["7", 0], "lora_name": LORA,
               "strength_model": 1.0}}
+    neg = MASH_NEG + ", blood, gore, grid, split frame"
+    extra, who = None, ""
+    if hero:
+        g["2"] = {"class_type": "LoadImage", "_meta": {"title": "the hero's photo"}, "inputs": {"image": "hero.png"}}
+        if sheet:
+            dec = _chain(g, "1", SHEET_PROMPT.format(look=look or HERO_LOOK), neg + ", scene, background objects",
+                         seed % 0xFFFFFFFF, ("40", "41", "42", "43", "44", "45", "46", "47"),
+                         extra={"image2": ["2", 0]})
+            g["30"] = {"class_type": "SaveImage", "_meta": {"title": "the character sheet"},
+                       "inputs": {"images": [dec, 0], "filename_prefix": "sheet"}}
+            extra, who = {"image2": [dec, 0], "image3": ["2", 0]}, SHEET_DRAW
+        else:
+            extra, who = {"image2": ["2", 0]}, HERO_DRAW
     for n, prompt in enumerate(prompts, 1):
         b = n * 100
-        out = _chain(g, "1", prompt, MASH_NEG + ", blood, gore, grid, split frame", seed % 0xFFFFFFFF,
+        out = _chain(g, "1", "One single scene. " + who + prompt, neg, seed % 0xFFFFFFFF,
                      tuple(str(b + i) for i in range(4, 12)), extra=extra)
         g[str(30 + n)] = {"class_type": "SaveImage", "_meta": {"title": f"panel {n}"},
                           "inputs": {"images": [out, 0], "filename_prefix": f"panel{n}"}}

@@ -40,6 +40,17 @@ For each panel, plan:
 - "caption" and "bubbles": see LETTERING.
 Vary the camera across panels (don't make every panel a medium shot).
 
+PANEL FLOW
+The page should read like one continuous moment, with each panel leading into the next.
+- Write the beats as a chain. Each beat starts from where the last one ended ("Then...", "Because of that...", "But..."). No beat introduces something out of nowhere.
+- Setup before payoff. Anything that acts in a panel must already be visible in the panel before it, or clearly arriving (entering from the edge of the frame, a shadow growing, a sound effect from off-panel). The help doesn't teleport in; show it coming.
+- End each panel on a hook: something mid-motion or about to happen (the threat looming, an object falling, the hero turning to look, a fuse burning) that the next panel pays off.
+- Start each panel from the previous panel's hook: the falling object lands, the turned head sees the threat, the fuse reaches the bomb.
+- Keep screen direction. The hero stays on the same side of the frame across the page, and the threat always comes from the same side. Don't flip them between panels.
+- Keep objects where they were. If the chair is on the left in panel 2, it's on the left in panel 3.
+- Same place, same time. The whole page happens within a minute or two: same location, same time of day, same lighting. No jumps to sunset.
+- Test: read only the beats, in order. If any beat needs an extra explanation to follow from the one before, rewrite it.
+
 CONTINUITY
 The comic has to look like one continuous story, across panels and across pages.
 - Start from the CONTINUITY you were given (if any). Everything in it is still true at the start of this round: the hero still looks that way, still has those things, and those characters or objects are still around. Show it in every panel unless the story changes it.

@@ -39,6 +39,9 @@ h2{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut)
 @keyframes s{to{transform:rotate(360deg)}}
 .teams{display:flex;gap:14px;font-size:16px;color:var(--mut);flex-wrap:wrap}.teams b{color:var(--ink)}
 .title{font-size:20px;font-weight:800}.story{font-size:15px;color:var(--mut);margin-top:6px;line-height:1.45}
+.beats{margin:10px 0 0;padding:0;list-style:none;counter-reset:b}
+.beats li{counter-increment:b;position:relative;padding:8px 0 8px 34px;border-top:1px solid #222736;font-size:17px;line-height:1.4;color:var(--ink)}
+.beats li:before{content:counter(b);position:absolute;left:0;top:8px;width:24px;height:24px;border-radius:6px;background:var(--acc);color:#1a1400;font-weight:800;font-size:14px;text-align:center;line-height:24px}
 .fate{display:inline-block;color:#fff;font-weight:800;border-radius:6px;padding:1px 10px;font-size:15px;letter-spacing:.04em;margin-left:8px;vertical-align:middle}
 .fate.lives{background:#1f9d5b}.fate.dies{background:#c0392b}
 </style>
@@ -62,7 +65,7 @@ h2{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut)
     <h2>verbs</h2><div class=chips id=verbs></div>
     <div class=busy id=busy></div>
   </div>
-  <div class=card id=story style="display:none"><div class=title id=title></div><div class=story id=storytext></div></div>
+  <div class=card id=story style="display:none;flex:0 1 auto;overflow:auto"><div class=title id=title></div><ol class=beats id=beats></ol></div>
   <div class=card><h2>Players</h2><div class=teams id=teams></div></div>
 </div>
 </div>
@@ -104,7 +107,10 @@ function render(){
   $('#scenetext').textContent = over ? 'The End. Reset to play again.' : (st.scene || 'the game master is looking at the hero and setting the scene...');
   $('#note').textContent = over ? '' : 'no timer - Go closes the pot';
   $('#teams').innerHTML = `<span>team Kill <b>${st.players.kill}</b></span><span>team Save <b>${st.players.save}</b></span><span>sides are secret; the game master knows</span>`;
-  if(cur){ $('#story').style.display=''; $('#title').textContent='Round '+cur.round+': '+(cur.title||''); $('#storytext').textContent=cur.story||''; }
+  if(cur){ $('#story').style.display=''; $('#title').textContent='Round '+cur.round+': '+(cur.title||'');
+    const beats=(cur.panels||[]).map(p=>p.text||p.caption||'').filter(Boolean);
+    $('#beats').innerHTML = beats.length ? beats.map(t=>`<li>${esc(t)}</li>`).join('')
+      : `<li>${esc(cur.story||'')}</li>`; }
   else $('#story').style.display='none';
   const key=cur ? cur.round+':'+(cur.image||(cur.images||[]).join('|')) : '';
   if(key!==shown){ shown=key; $('#stage').innerHTML = cur ? stageHtml(cur,H) : ''; }

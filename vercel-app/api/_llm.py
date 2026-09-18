@@ -3,9 +3,10 @@ at /proxy/anthropic/v1/messages and bills the production Comfy key. The same rou
 ClaudeNode inside ComfyUI uses; here it is called from the game engine, so the reply is a
 JSON document instead of a file name.
 
-The team's two prompts (build/team_prompts.txt, from Team 6's artifact) live verbatim in
-prompts/setup.txt and prompts/smash.txt; the "THIS GAME" / "THIS ROUND" tails they end with
-are rendered here.
+The team's two prompts (build/team_prompts.txt, from Team 6's artifact) live in
+prompts/setup.txt and prompts/smash.txt, plus a PANEL FLOW section added to the Smash on
+2026-09-18 so the four panels read as one continuous moment. The "THIS GAME" / "THIS ROUND"
+tails they end with are rendered here.
 """
 import base64, json, os, re, urllib.request
 
@@ -13,7 +14,7 @@ ROUTER = "https://api.comfy.org/proxy/anthropic/v1/messages"
 MODEL_FAST = "claude-haiku-4-5-20251001"
 MODEL_FUNNY = "claude-sonnet-5"
 HERE = os.path.dirname(os.path.abspath(__file__))
-PAGE_ASPECT = "portrait, 3:4"
+PAGE_ASPECT = "square, 1:1"
 STYLE = ("Bright, clean, modern cartoon comic-book art: bold black ink outlines, flat saturated colours, "
          "simple shading, expressive faces, clear readable compositions.")
 
@@ -114,14 +115,21 @@ def smash(hero_name, round_number, total_rounds, verdict, hero_description, curr
               f"- Nouns: {join(kill_nouns)}", f"- Verbs: {join(kill_verbs)}", "",
               "SAVE POOL:", f"- Nouns: {join(save_nouns)}", f"- Verbs: {join(save_verbs)}"]
     if panels_exactly:
-        lines += ["", "THIS GAME'S RENDER (overrides PANEL STRUCTURE counts and LETTERING):",
+        lines += ["", "THIS GAME'S RENDER (overrides PANEL STRUCTURE counts, LETTERING and THE PAGE PROMPT):",
                   f"- Plan EXACTLY {panels_exactly} panels this round, whatever the round number: fold the beats "
-                  f"into {panels_exactly} moments, the last one the OUTCOME.",
-                  "- Each panel is drawn as its own separate picture with NO lettering at all. Keep \"caption\" and "
-                  "\"bubbles\" in the JSON, but add to every panel object a field \"text\": one or two sentences, "
-                  "max 35 words, that narrate that panel to the audience like a storybook (what happens and what is "
-                  "said, in prose). The four \"text\" fields read in order must tell the whole story.",
-                  "- Still write \"page_prompt\"; it may be short."]
+                  f"into {panels_exactly} moments, the last one the OUTCOME. The layout is always a 2x2 grid of "
+                  f"four equal square panels, two on top and two below; never any other arrangement, and never a "
+                  f"wide panel across the bottom.",
+                  "- The whole page is drawn in ONE shot, so PANEL FLOW matters more than anything else: the four "
+                  "panels are one continuous moment, same place, same time, same screen direction.",
+                  "- NO lettering is drawn on the page. Write \"caption\" and \"bubbles\" as usual in the JSON (the "
+                  "audience reads them beside the page), but the \"page_prompt\" must not mention captions, speech "
+                  "bubbles, sound effects, signs, labels or any other text: give each panel its visual only, and "
+                  "close the page prompt with \"No text, letters, numbers, speech bubbles, caption boxes or sound "
+                  "effects anywhere on the page.\" before the art style.",
+                  "- Add to every panel object a field \"text\": one or two sentences, max 35 words, narrating that "
+                  "panel to the audience like a storybook (what happens, and what anyone says, in prose). The four "
+                  "\"text\" fields read in order must tell the whole story on their own."]
     text = claude(prompt_file("smash.txt") + "\n" + "\n".join(lines), "Go.", max_tokens=6000, timeout=120)
     got = parse_json(text)
     got["raw"] = text
