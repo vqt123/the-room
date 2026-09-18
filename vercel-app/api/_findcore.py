@@ -98,25 +98,43 @@ def partner_key():
     return os.environ.get("COMFY_PARTNER_API_KEY", "").strip() or None
 
 
-def submit_story(lines, seed=0):
-    """The story round: an LLM node in the graph writes the prompt from everyone's lines."""
+def submit_story(lines, seed=0, hero=None):
+    """The comic round: an LLM node in the graph writes four panels from everyone's lines.
+    `hero` is the main character's photo (bytes), uploaded as the job's input."""
     if not partner_key():
         raise RuntimeError("server is missing COMFY_PARTNER_API_KEY (the LLM node needs a production key)")
     seed = int(seed) or random.randrange(1, 2 ** 31)
-    graph, llm_prompt = build_story(lines, seed=seed)
+    graph, llm_prompt = build_story(lines, seed=seed, hero=bool(hero))
     c = client()
-    job = c.submit(c.workflows.from_json(graph), api_key=partner_key())
-    return {"id": job.id, "seed": seed, "prompt": llm_prompt, "scene": "told by the storyteller"}
+    wf = c.workflows.from_json(graph)
+    if hero:
+        wf.set_input("2", "image", c.assets.from_bytes(hero, filename="hero.png"))
+    job = c.submit(wf, api_key=partner_key())
+    return {"id": job.id, "seed": seed, "prompt": llm_prompt, "scene": "a comic strip by the storyteller"}
 
 
-def story_text(job_id):
-    """The story rides out as the picture's filename."""
-    c = client()
-    out = _output(c.jobs.get(job_id), "31")
-    if not out or not out.name:
-        return None
-    name = out.name.rsplit("_", 2)[0] if "_0" in out.name else out.name
+PANEL_NODES = ("31", "32", "33", "34")
+
+
+def _name_text(name):
+    """A caption that rode out as a saved file's name: strip the counter and the extension."""
+    if not name:
+        return ""
+    name = name.rsplit("_", 2)[0] if "_0" in name else name
     return name.replace("_", " ").strip()
+
+
+def story_panels(job_id):
+    """The four panels of a comic round, in order, each with the caption that named its file."""
+    c = client()
+    job = c.jobs.get(job_id)
+    panels = []
+    for node in PANEL_NODES:
+        out = _output(job, node)
+        if out is None:
+            continue
+        panels.append({"url": str(out.get_download_url().url), "caption": _name_text(out.name)})
+    return panels
 
 
 TERMINAL_OK = ("succeeded", "completed", "success")

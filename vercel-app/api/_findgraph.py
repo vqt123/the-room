@@ -136,12 +136,14 @@ def refine_prompt(thing: str) -> str:
             f"nothing else in the picture.")
 
 
-def _chain(g, base_node, prompt, negative, seed, ids):
-    """One generation pass: encode, reference, encode latent, sample, decode."""
+def _chain(g, base_node, prompt, negative, seed, ids, extra=None):
+    """One generation pass: encode, reference, encode latent, sample, decode. `extra` adds
+    inputs to the positive encoder, e.g. a second reference image."""
     scale, pos, neg, rpos, rneg, enc, ks, dec = ids
     g[scale] = {"class_type": "FluxKontextImageScale", "inputs": {"image": [base_node, 0]}}
     g[pos] = {"class_type": "TextEncodeQwenImageEditPlus",
-              "inputs": {"clip": ["4", 0], "prompt": prompt, "vae": ["5", 0], "image1": [scale, 0]}}
+              "inputs": dict({"clip": ["4", 0], "prompt": prompt, "vae": ["5", 0], "image1": [scale, 0]},
+                             **(extra or {}))}
     g[neg] = {"class_type": "TextEncodeQwenImageEditPlus",
               "inputs": {"clip": ["4", 0], "prompt": negative, "vae": ["5", 0], "image1": [scale, 0]}}
     g[rpos] = {"class_type": "FluxKontextMultiReferenceLatentMethod",
@@ -259,31 +261,65 @@ def vn_prompt(verb, noun, rng=None):
             f"colours, no text, no watermark, no border."), subject, base
 
 
-STORY_STYLE = (". Rich detail, cartoon illustration, thin black outlines, flat bright colours, every character and "
-               "object from the story clearly visible in one frame, no text, no watermark, no border.")
+PANELS = 4
+PANEL_SIZE = 1024
+# Never say "comic strip" or "panel" to the image model: it then draws a whole grid of tiny
+# panels inside the one picture (seen live 2026-09-18). Each picture is one single scene.
+COMIC_STYLE = (". One single scene filling the whole picture, no grid, no sub-pictures, no split frames. Rich "
+               "detail, cartoon comic-book illustration, thin black outlines, flat bright colours, the characters "
+               "drawn exactly as described, no speech bubbles, no text, no watermark, no border.")
 
 
-def story_prompt(lines):
+HERO_LOOK = ("a young man with short dark hair, round wire-rimmed glasses, a black t-shirt with a yellow logo "
+             "and an olive green leather bomber jacket")
+HERO_DRAW = ("The main character is the person in the second picture, drawn as a cartoon character with the same "
+             "face, hair, glasses and clothes. ")
+
+
+def story_prompt(lines, hero=False):
     listed = "; ".join(str(x).strip() for x in lines if str(x).strip())[:1500]
-    return (f"Here is a list of things a room full of people typed: {listed}. Write ONE very short story, two "
-            f"sentences at most and under 220 characters in total, in which every one of these things appears and "
-            f"they interact with each other. Plain words, present tense, no title, no quotes, no line breaks, no "
-            f"characters other than letters, digits, spaces, commas and full stops. Output only the story.")
+    lead = (f"The main character of the strip is our hero, {HERO_LOOK}; everything the room typed happens to him "
+            f"or around him, and he is in every panel. ") if hero else ""
+    cast = ("start with our hero, described exactly as above, then " if hero else "")
+    return (f"Here is a list of things a room full of people typed: {listed}. {lead}Write a four panel comic strip "
+            f"in which every one of these things appears and they interact, with a set-up, a twist and a punchline. "
+            f"Output exactly this, on one line, and nothing else: CAST: {cast}a short visual description of each "
+            f"character, under 140 characters in total. PANEL 1: what the first panel shows, under 150 "
+            f"characters. PANEL 2: the same for the second panel. PANEL 3: the same for the third. PANEL 4: the "
+            f"same for the last. Present tense, plain words, no title, no quotes, no line breaks, no characters "
+            f"other than letters, digits, spaces, commas, colons and full stops.")
 
 
-def build_story(lines, seed=1234, llm_model="gemini-3-1-flash-lite"):
-    """Everyone's lines go to an LLM node INSIDE the graph, which writes a short story that
-    contains all of them; the story becomes the image prompt, and it also becomes the saved
-    file's name so the room can read it. One job: LLM call, text join, one sampler pass.
-    Returns (graph, the LLM prompt).
+def _extract(g, nid, source, label, until=r"PANEL\s*\d\s*:"):
+    """A core RegexExtract node: the text after `label:` up to the next label (`until`) or the end."""
+    g[nid] = {"class_type": "RegexExtract", "_meta": {"title": f"pull out {label}"},
+              "inputs": {"string": source, "regex_pattern": rf"{label}\s*:\s*(.*?)\s*(?:{until}|$)",
+                         "mode": "First Group", "case_insensitive": True, "multiline": False,
+                         "dotall": True, "group_index": 1}}
+    return [nid, 0]
+
+
+def build_story(lines, seed=1234, llm_model="gemini-3-1-flash-lite", hero=False, prompt=None):
+    """Everyone's lines go to an LLM node INSIDE the graph, which writes a four panel comic strip
+    in a fixed format. Four core regex nodes cut it into a cast description and four panel
+    descriptions; each panel gets its own prompt and its own sampler pass, all four with the
+    same seed and the same cast text so the characters stay recognisable. Each panel's
+    description becomes its saved file's name, so the room can read the captions back.
+    With `hero`, node 2 is a photo of the main character, handed to every panel's encoder
+    as a second reference picture next to the blank canvas, so the same person is drawn
+    in all four. One job: LLM call, five text cuts, four pictures. Returns (graph, the LLM prompt).
     """
     g = {}
     g["40"] = {"class_type": "GeminiNode", "_meta": {"title": "the storyteller"},
-               "inputs": {"prompt": story_prompt(lines), "model": llm_model, "seed": seed % 2147483647}}
-    g["41"] = {"class_type": "StringConcatenate", "_meta": {"title": "story + style"},
-               "inputs": {"string_a": ["40", 0], "string_b": STORY_STYLE, "delimiter": ""}}
+               "inputs": {"prompt": prompt or story_prompt(lines, hero=hero), "model": llm_model,
+                          "seed": seed % 2147483647}}
+    extra = None
+    if hero:
+        g["2"] = {"class_type": "LoadImage", "_meta": {"title": "the main character"}, "inputs": {"image": "hero.png"}}
+        extra = {"image2": ["2", 0]}
+    cast = _extract(g, "42", ["40", 0], "CAST")
     g["1"] = {"class_type": "EmptyImage", "_meta": {"title": "canvas"},
-              "inputs": {"width": 1328, "height": 1328, "batch_size": 1, "color": 8421504}}
+              "inputs": {"width": PANEL_SIZE, "height": PANEL_SIZE, "batch_size": 1, "color": 8421504}}
     g["3"] = {"class_type": "UNETLoader", "inputs": {"unet_name": UNET, "weight_dtype": "default"}}
     g["4"] = {"class_type": "CLIPLoader", "inputs": {"clip_name": CLIP, "type": "qwen_image", "device": "default"}}
     g["5"] = {"class_type": "VAELoader", "inputs": {"vae_name": VAE}}
@@ -291,10 +327,22 @@ def build_story(lines, seed=1234, llm_model="gemini-3-1-flash-lite"):
     g["7"] = {"class_type": "CFGNorm", "inputs": {"model": ["6", 0], "strength": 1.0}}
     g["8"] = {"class_type": "LoraLoaderModelOnly", "inputs": {"model": ["7", 0], "lora_name": LORA,
               "strength_model": 1.0}}
-    out = _chain(g, "1", ["41", 0], MASH_NEG, seed % 0xFFFFFFFF,
-                 ("9", "10", "11", "12", "13", "14", "15", "16"))
-    g["31"] = {"class_type": "SaveImage", "_meta": {"title": "the picture, named after its story"},
-               "inputs": {"images": [out, 0], "filename_prefix": ["40", 0]}}
+    for n in range(1, PANELS + 1):
+        b = n * 100
+        panel = _extract(g, str(b), ["40", 0], f"PANEL {n}")
+        g[str(b + 1)] = {"class_type": "StringConcatenate", "_meta": {"title": f"panel {n}: cast"},
+                         "inputs": {"string_a": "One single scene. " + (HERO_DRAW if hero else "")
+                                                + "The characters: ",
+                                    "string_b": cast, "delimiter": ""}}
+        g[str(b + 2)] = {"class_type": "StringConcatenate", "_meta": {"title": f"panel {n}: what happens"},
+                         "inputs": {"string_a": [str(b + 1), 0], "string_b": panel,
+                                    "delimiter": ". What happens in this scene: "}}
+        g[str(b + 3)] = {"class_type": "StringConcatenate", "_meta": {"title": f"panel {n}: style"},
+                         "inputs": {"string_a": [str(b + 2), 0], "string_b": COMIC_STYLE, "delimiter": ""}}
+        out = _chain(g, "1", [str(b + 3), 0], MASH_NEG, seed % 0xFFFFFFFF,
+                     tuple(str(b + i) for i in range(4, 12)), extra=extra)
+        g[str(30 + n)] = {"class_type": "SaveImage", "_meta": {"title": f"panel {n}, named after its caption"},
+                          "inputs": {"images": [out, 0], "filename_prefix": panel}}
     return g, g["40"]["inputs"]["prompt"]
 
 
@@ -483,6 +531,36 @@ def build(things, scene=0, difficulty=3, seed=1234, photos=None):
     g["31"] = {"class_type": "SaveImage", "_meta": {"title": "the puzzle"},
                "inputs": {"images": ["54", 0], "filename_prefix": "puzzle"}}
     return g, thumbs
+
+
+# ---- Kill or Save: two secret teams' words, one four-panel comic, Yoland dies in panel 4 ----
+HERO_NAME = "Yoland"
+
+
+def kill_prompt(kill_words, save_words):
+    """The smash. The LLM knows which words were Kill and which were Save; the room does not."""
+    kill_words = ", ".join(kill_words)[:700] or "nothing"
+    save_words = ", ".join(save_words)[:700] or "nothing"
+    return (f"A room full of people is playing a game about {HERO_NAME}, {HERO_LOOK}. Two secret teams typed single "
+            f"words. The KILL team wants {HERO_NAME} gone; their words: {kill_words}. The SAVE team wants him to "
+            f"live; their words: {save_words}. The teams are invisible: they are never characters, never drawn, "
+            f"never mentioned in the panels. Write a four panel comic strip that smashes as many of these words "
+            f"as possible into one absurd, funny story; fun over logic; every word you use is a real thing or "
+            f"action in the scene. Panels 1 to 3: the Kill words come at him and the Save words rescue him each "
+            f"time, just barely. Panel 4: the Kill words finally get {HERO_NAME} HIMSELF, comic-book style: his "
+            f"own body flattened like a pancake, or squashed, zapped or launched into the sky, his own eyes spinning "
+            f"in spirals, no blood, no gore; describe {HERO_NAME}'s body in that state. Output "
+            f"exactly this, on one line, and nothing else: CAST: start with {HERO_NAME}, {HERO_LOOK}, then a short "
+            f"visual description of every other character, under 160 characters in total. PANEL 1: what the first "
+            f"panel shows, under 150 characters, {HERO_NAME} in it. PANEL 2: the same for the second panel. PANEL "
+            f"3: the same for the third. PANEL 4: the same for the last. Present tense, plain words, no title, no "
+            f"quotes, no line breaks, no characters other than letters, digits, spaces, commas, colons and full stops.")
+
+
+def build_kill(kill_words, save_words, seed=1234, hero=True):
+    """One round of Kill or Save as one job: the smash, five regex cuts, four pictures with the
+    hero's photo as the reference, each caption riding out as its file's name."""
+    return build_story([], seed=seed, hero=hero, prompt=kill_prompt(kill_words, save_words))
 
 
 # The single-thing graphs the older Find It page still posts.

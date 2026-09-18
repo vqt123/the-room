@@ -19,7 +19,7 @@ import json, os, random, re, secrets, sys, time
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import _blob
 import _kv
-from _findcore import (TAP_PAD, answers_many, poll, puzzle_url, story_text, submit_mash, submit_many,
+from _findcore import (TAP_PAD, answers_many, poll, puzzle_url, story_panels, submit_mash, submit_many,
                        submit_story, submit_vn)
 from _findgraph import MAX_THINGS, MAX_WORDS, to_ing
 from _core import check_password  # noqa: F401
@@ -45,11 +45,13 @@ KINDS = ("verb", "noun")
 VN_MODES = ("vn", "vnfind")
 # Modes that put everything submitted this window into one picture, with no hiding.
 MASH_MODES = ("mash", "pairs", "story")
-STORY_MS = 20_000           # an LLM call plus one sampler pass, measured ~7 s + 11 s
+STORY_MS = 45_000           # an LLM call plus four 1024-square sampler passes, one per comic panel
 PRELOAD_MS = 9_000          # how early the next picture's URL is handed out, to warm the cache
 STUCK_MS = 210_000          # a job still going after this long stops holding the queue up
 TTL_S = 86_400              # a session forgets itself after a day
 LOCK_MS = 30_000
+# Session settings that a reset leaves alone: the mode, the ticker, and the comic's main character.
+KEEP_ON_RESET = (":mode", ":ticking", ":tickid", ":hero")
 ID_RE = re.compile(r"^\d+-[0-9a-f]{6}$")
 NAME_RE = re.compile(r"^[a-z0-9]{6,12}$")
 
@@ -107,6 +109,44 @@ def set_mode(sess, mode):
     mode = mode if mode in ("find", "mash", "pairs", "story", "vn", "vnfind") else "find"
     _kv.cmd("SET", f"rm:{sess}:mode", mode, "EX", TTL_S)
     return {"mode": mode}
+
+
+def get_hero(sess):
+    """The main character's photo URL for this session, or None."""
+    return _kv.cmd("GET", f"rm:{sess}:hero") or None
+
+
+def set_hero(sess, data=None, clear=False):
+    """Store the main character's photo (PNG or JPEG bytes) for this session. It lives outside
+    the session's picture folder, so a reset keeps it; `clear` drops it."""
+    if clear:
+        _kv.cmd("DEL", f"rm:{sess}:hero")
+        return {"hero": None}
+    if not data or len(data) < 1000:
+        raise ValueError("no photo")
+    if len(data) > 4_000_000:
+        raise ValueError("photo is too big (4 MB max)")
+    kind = "image/png" if data[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
+    path = f"rm/hero/{sess}-{secrets.token_hex(6)}.{'png' if kind == 'image/png' else 'jpg'}"
+    old = get_hero(sess)
+    _blob.put(path, data, kind)
+    url = f"{_blob.base_url()}/{path}"
+    _kv.cmd("SET", f"rm:{sess}:hero", url, "EX", TTL_S * 7)
+    if old:
+        try:
+            _blob.delete([old])
+        except Exception:  # noqa: BLE001
+            pass
+    return {"hero": url}
+
+
+def _hero_bytes(sess):
+    url = get_hero(sess)
+    if not url:
+        return None
+    import urllib.request
+    with urllib.request.urlopen(url, timeout=30) as r:
+        return r.read()
 
 
 def state(sess):
@@ -171,13 +211,17 @@ def state(sess):
                                      else None)})
         row = {"id": rid, "ms": r["ms"], "job": r.get("job"), "scene": r.get("scene"),
                "mode": r.get("mode", "find"), "prompt": r.get("prompt"),
-               "subject": r.get("subject"), "story": r.get("story"),
+               "subject": r.get("subject"), "story": r.get("story"), "captions": r.get("captions"),
                "state": st, "things": things, "count": len(things),
                "found": sum(1 for t in things if t["found_by"])}
         if st == "drawing":
             row["eta_ms"] = max(0, r["ms"] + draw_ms(len(things), row["mode"]) - now)
         if rid in dones:
             row["image"] = f"{base}/rm/{sess}/img/{rid}.png"
+            if r.get("panels"):
+                # A comic round is several pictures; the first doubles as the row's image.
+                row["panels"] = [f"{base}/rm/{sess}/img/{rid}-p{n}.png" for n in range(1, r["panels"] + 1)]
+                row["image"] = row["panels"][0]
         if rid in shows:
             row["shown_ms"] = shows[rid]
         if rid in fails:
@@ -214,6 +258,7 @@ def state(sess):
     # until the last few seconds; a mash-up hides nothing, so it goes out as soon as it exists.
     early = mode == "mash" or not onscreen or show_left <= PRELOAD_MS
     preload = ready[0]["image"] if ready and early else None
+    preloads = (ready[0].get("panels") or [preload]) if preload else []
     return {"now": now, "queue": queue, "verbs": verbs, "nouns": nouns,
             "drawing": drawing, "ready": ready,
             "history": shown[-6:], "current": onscreen, "onscreen": onscreen,
@@ -222,7 +267,7 @@ def state(sess):
             "can_start": len(live) + len(ready) < BUFFER and (mode not in ("pairs", "story") or bool(queue)),
             "can_show": bool(ready) and show_left == 0,
             "show_left": show_left, "period": window or play_ms(1, mode),
-            "mode": mode, "preload": preload,
+            "mode": mode, "preload": preload, "preloads": preloads, "hero": get_hero(sess),
             "max_things": MAX_WORDS if mode == "mash" else MAX_THINGS,
             "next_ms": now + show_left, "blob_base": base, "sess": sess}
 
@@ -296,7 +341,7 @@ def start(sess, force=False):
             picked = [add(sess, random.choice(HOUSE), "the house", "housebot00")]
         words = [p["text"] for p in picked]
         if mode == "story":
-            got = submit_story(words)
+            got = submit_story(words, hero=_hero_bytes(sess))
             items = [{"id": p["id"], "text": p["text"]} for p in picked]
         elif mode in MASH_MODES:
             got = submit_mash(words)
@@ -406,14 +451,22 @@ def publish(sess, rid):
     if got.get("state") != "done":
         return got
     import urllib.request
-    url = puzzle_url(job_id)
-    with urllib.request.urlopen(url, timeout=60) as r:
-        _blob.put(f"rm/{sess}/img/{rid}.png", r.read(), "image/png")
     if rec.get("mode") == "story":
-        story = story_text(job_id)
-        if story:
-            rec["story"] = story
-            _kv.cmd("HSET", _room_key(sess), f"n:{rid}", json.dumps(rec))
+        # A comic round: every panel is its own picture, and its caption is its file's name.
+        panels = story_panels(job_id)
+        if not panels:
+            _kv.cmd("HSET", _room_key(sess), f"f:{rid}", "the job finished without any panels")
+            return {"state": "error", "error": "the job finished without any panels"}
+        for n, p in enumerate(panels, 1):
+            with urllib.request.urlopen(p["url"], timeout=60) as r:
+                _blob.put(f"rm/{sess}/img/{rid}-p{n}.png", r.read(), "image/png")
+        rec["panels"] = len(panels)
+        rec["captions"] = [p["caption"] for p in panels]
+        _kv.cmd("HSET", _room_key(sess), f"n:{rid}", json.dumps(rec))
+    else:
+        url = puzzle_url(job_id)
+        with urllib.request.urlopen(url, timeout=60) as r:
+            _blob.put(f"rm/{sess}/img/{rid}.png", r.read(), "image/png")
     if rec.get("mode") in MASH_MODES or rec.get("mode") == "vn":
         _kv.pipe([["HSET", _room_key(sess), f"d:{rid}", str(int(time.time() * 1000))],
                   ["EXPIRE", _room_key(sess), TTL_S]])

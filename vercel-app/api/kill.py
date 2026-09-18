@@ -1,13 +1,12 @@
-"""The Room's one endpoint. GET reads the shared state, POST changes it."""
-import json, os, sys
+"""Kill or Save's one endpoint. GET reads the shared state, POST changes it."""
+import base64, json, os, sys
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 
 # Appended, not prepended: api/queue.py would otherwise shadow the standard
 # library's queue module for anything these handlers import.
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from _room import (add, advance, check_password, conduct, found, publish, reset, set_hero, set_mode,
-                   show, start, state, vote)
+from _kill import advance, check_password, join, publish, reset, set_hero, start, state, word
 
 SESS_OK = set("abcdefghijklmnopqrstuvwxyz0123456789-")
 
@@ -33,7 +32,7 @@ class handler(BaseHTTPRequestHandler):
         if not check_password((q.get("password") or [""])[0]):
             return self._json({"error": "wrong password"}, 401)
         try:
-            self._json(state(_sess((q.get("sess") or [""])[0])))
+            self._json(state(_sess((q.get("sess") or [""])[0]), (q.get("voter") or [None])[0]))
         except Exception as e:  # noqa: BLE001
             self._json({"error": str(e)[:400]}, 500)
 
@@ -48,36 +47,22 @@ class handler(BaseHTTPRequestHandler):
         sess = _sess(body.get("sess"))
         action = body.get("action")
         try:
-            if action == "add":
-                return self._json(add(sess, body.get("text"), body.get("name"), body.get("voter"),
-                                     body.get("kind"), body.get("verb"), body.get("noun")))
-            if action == "vote":
-                return self._json(vote(sess, body.get("item"), body.get("voter")))
+            if action == "join":
+                return self._json(join(sess, body.get("voter"), body.get("name")))
+            if action == "word":
+                return self._json(word(sess, body.get("voter"), body.get("text")))
             if action == "start":
-                # Only the Submit button may start a round. Older page code still open in
-                # somebody's browser auto-called start whenever the list was non-empty;
-                # without this flag it is refused, whatever the client thinks it is doing.
+                # Only the Go button on the screen page closes a round; nothing runs on its own.
                 if not body.get("submit"):
-                    return self._json({"skipped": "only the Submit button on the screen page starts a round"})
-                return self._json(start(sess, force=bool(body.get("force"))))
-            if action == "show":
-                return self._json(show(sess, body.get("round")))
+                    return self._json({"skipped": "only the Go button on the screen page starts a round"})
+                return self._json(start(sess))
             if action == "publish":
                 return self._json(publish(sess, body.get("round")))
-            if action == "found":
-                return self._json(found(sess, body.get("round"), body.get("x"), body.get("y"),
-                                        body.get("voter"), body.get("name")))
-            if action == "mode":
-                return self._json(set_mode(sess, body.get("mode")))
-            if action == "hero":
-                # The comic's main character: a base64 photo, or clear.
-                import base64
-                raw = base64.b64decode(body.get("image") or "") if body.get("image") else None
-                return self._json(set_hero(sess, raw, clear=bool(body.get("clear"))))
             if action == "advance":
                 return self._json(advance(sess))
-            if action == "conduct":
-                return self._json(conduct(sess))
+            if action == "hero":
+                raw = base64.b64decode(body.get("image") or "") if body.get("image") else None
+                return self._json(set_hero(sess, raw, clear=bool(body.get("clear"))))
             if action == "reset":
                 return self._json(reset(sess))
             self._json({"error": "unknown action"}, 400)

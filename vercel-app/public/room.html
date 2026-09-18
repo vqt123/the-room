@@ -29,6 +29,11 @@ button:disabled{opacity:.45;cursor:default}
 .up.on{background:var(--acc);color:#1a1400}
 .status{min-height:20px;font-size:14px}
 .story{margin-top:10px;font-size:15px;line-height:1.5;color:var(--ink)}.story:empty{display:none}
+.strip{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px;background:#fff;line-height:1.3}
+.panel{position:relative;background:#fff;border:2px solid #111;border-radius:4px;overflow:hidden}
+.stage .panel img{width:100%;display:block;cursor:default;background:#fff}
+.panel .cap{font-size:12px;color:#111;border-top:2px solid #111;padding:4px 6px;font-weight:600}
+.panel .num{position:absolute;top:4px;left:4px;background:var(--acc);color:#1a1400;font-weight:800;border-radius:4px;padding:0 6px;font-size:12px;line-height:1.5}
 .busy{padding:18px 14px;line-height:1.5;font-size:16px}.busy .n{color:var(--mut);font-size:13px;margin-top:4px}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--mut);border-top-color:var(--ink);border-radius:50%;animation:s .8s linear infinite;vertical-align:-2px;margin-right:8px}
 @keyframes s{to{transform:rotate(360deg)}}.status.err{color:var(--bad)}.status.ok{color:var(--ok)}
@@ -157,10 +162,10 @@ function drawingBanner(){
   const d=st.drawing[0], r=st.ready[0];
   if(d){
     const secs=Math.max(0,Math.round((st.now-d.ms)/1000));
-    const what=d.mode==='find'?'hiding':'drawing';
+    const what=d.mode==='find'?'hiding':d.mode==='story'?'writing a comic about':'drawing';
     return `<div class=busy><span class=spin></span><b>${what} ${d.count} thing${d.count===1?'':'s'}</b> - ${secs}s`+
            `<div class=n>${esc(d.things.map(t=>t.text).join(', '))}</div>`+
-           `<div class=n>about ${d.mode==='find'?'25':'12'} seconds, then it goes up here and on the big screen</div></div>`;
+           `<div class=n>about ${d.mode==='find'?'25':d.mode==='story'?'45':'12'} seconds, then it goes up here and on the big screen</div></div>`;
   }
   if(r) return `<div class=busy><b>ready</b> - going up in a moment<div class=n>${esc(r.things.map(t=>t.text).join(', '))}</div></div>`;
   return '';
@@ -177,6 +182,12 @@ function stage(cur){
   if(shownItem===cur.id) return;
   shownItem=cur.id; myTaps=0; $('#result').textContent='';
   wrap.innerHTML='';
+  if(cur.panels && cur.panels.length){
+    wrap.innerHTML='<div class=strip>'+cur.panels.map((u,i)=>
+      `<div class=panel><span class=num>${i+1}</span><img src="${u}" alt="panel ${i+1}">`+
+      `<div class=cap>${esc((cur.captions||[])[i]||'')}</div></div>`).join('')+'</div>';
+    return;
+  }
   const img=new Image(); img.src=cur.image; img.alt='find it';
   if(st.mode==='find'||st.mode==='vnfind') img.onclick=ev=>tap(ev,img,cur);
   else img.style.cursor='default';
@@ -222,7 +233,7 @@ function render(){
   const left=Math.max(0,Math.round(st.show_left/1000));
   $('#clock').textContent = pairs ? (cur ? 'up' : '') : cur ? left+'s left' : 'soon';
   $('#cap').textContent = pairs
-    ? (st.mode==='story' ? 'An LLM inside the job weaves everyone\'s lines into one short story, and the story becomes the picture. Then the list is cleared.'
+    ? (st.mode==='story' ? 'An LLM inside the job turns everyone\'s lines into a 4-panel comic strip, and each panel is drawn as its own picture. Then the list is cleared.'
        : 'Everyone\'s verb + noun goes into ONE picture when Submit is pressed on the big screen. Then the list is cleared.')
     : vnf
     ? 'One vote in each pool. What wins gets drawn, hidden in a busy picture, and you have to tap it.'

@@ -1,0 +1,110 @@
+<!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>Kill or Save - screen</title>
+<style>
+:root{--bg:#0b0d12;--card:#161922;--ink:#eceff5;--mut:#8f97a6;--acc:#ffd23c;--ok:#5ddc97;--bad:#ff6b6b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;overflow:hidden}
+.grid{display:grid;grid-template-columns:1fr 400px;gap:22px;height:100vh;padding:22px}
+.card{background:var(--card);border-radius:18px;padding:20px;overflow:hidden}
+.left{display:flex;flex-direction:column;gap:14px;min-height:0}
+.head{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+h1{font-size:34px;margin:0;letter-spacing:.02em}
+.hero{display:flex;align-items:center;gap:10px;color:var(--mut);font-size:16px}
+.hero img{width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid var(--acc)}
+.ctl{margin-left:auto;display:flex;align-items:center;gap:14px}
+.ctl button{padding:12px 22px;border:0;border-radius:12px;background:var(--acc);color:#1a1400;font-size:19px;font-weight:800;cursor:pointer}
+.ctl button:disabled{opacity:.4;cursor:default}
+.stage{flex:1;min-height:0;background:#000;border-radius:18px;overflow:hidden;position:relative;display:flex;align-items:center;justify-content:center}
+.stage .msg{color:var(--mut);font-size:22px;padding:30px;text-align:center;line-height:1.5}
+.strip{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:12px;width:100%;height:100%;padding:12px;background:#fff}
+.panel{position:relative;display:flex;flex-direction:column;min-height:0;min-width:0;background:#fff;border:3px solid #111;border-radius:6px;overflow:hidden;animation:pop .6s ease-out}
+.panel img{flex:1;min-height:0;width:100%;object-fit:contain;background:#fff}
+.panel .cap{font-size:16px;line-height:1.3;color:#111;border-top:3px solid #111;padding:6px 10px;font-weight:600}
+.panel .num{position:absolute;top:8px;left:8px;background:var(--acc);color:#1a1400;font-weight:800;border-radius:6px;padding:0 8px;font-size:15px}
+@keyframes pop{from{transform:scale(.94);opacity:0}to{transform:scale(1);opacity:1}}
+.join{font-size:17px;color:var(--mut)}.join b{color:var(--ink)}
+h2{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin:0 0 8px}
+.right{display:flex;flex-direction:column;gap:18px;min-height:0}
+.right .card{flex:1;min-height:0;overflow:auto}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{background:#222736;border-radius:999px;padding:8px 16px;font-size:22px;font-weight:700}
+.busy{color:var(--acc);font-size:20px;margin-top:10px;line-height:1.4}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid var(--mut);border-top-color:var(--acc);border-radius:50%;animation:s .8s linear infinite;vertical-align:-2px;margin-right:8px}
+@keyframes s{to{transform:rotate(360deg)}}
+.teams{display:flex;gap:14px;font-size:16px;color:var(--mut);flex-wrap:wrap}.teams b{color:var(--ink)}
+.was{font-size:15px;color:var(--mut);margin-top:10px}
+</style>
+<div class=grid>
+<div class=left>
+  <div class=head><h1>Kill or Save</h1>
+    <span class=hero id=hero></span>
+    <span class=ctl><button id=go>Go</button></span>
+  </div>
+  <div class=stage id=stage><div class=msg>starting up...</div></div>
+  <div class=join>Join on your phone: <b id=url>-</b> &nbsp;&middot;&nbsp; <span id=note></span></div>
+</div>
+<div class=right>
+  <div class=card><h2 id=fhead>In the pot</h2>
+    <div class=chips id=feed></div>
+    <div class=busy id=busy></div>
+    <div class=was id=was></div>
+  </div>
+  <div class=card style="flex:0 0 auto"><h2>Players</h2><div class=teams id=teams></div></div>
+</div>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const SESS=(new URLSearchParams(location.search).get('sess')||'main').toLowerCase().replace(/[^a-z0-9-]/g,'').slice(0,24)||'main';
+let PW=localStorage.getItem('stm_pw')||''; if(!PW){PW=prompt('password')||''; localStorage.setItem('stm_pw',PW);}
+$('#url').textContent=location.host+'/kill.html'+(SESS==='main'?'':'?sess='+SESS);
+let st=null, busy=false, shownStrip='', warmed=new Set();
+
+async function api(body){
+  const r=await fetch('/api/kill',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(Object.assign({sess:SESS,password:PW},body))});
+  return r.json();
+}
+async function pull(){
+  const r=await fetch(`/api/kill?sess=${encodeURIComponent(SESS)}&password=${encodeURIComponent(PW)}`);
+  return r.json();
+}
+function esc(s){return (s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));}
+
+function render(){
+  const H=esc(st.hero_name), d=st.drawing, cur=st.current;
+  const heroHtml = st.hero ? `<img src="${st.hero}" alt=""><span>starring ${H}</span>` : `<span>starring ${H}</span>`;
+  if($('#hero').innerHTML!==heroHtml) $('#hero').innerHTML=heroHtml;
+  $('#fhead').textContent='In the pot for comic '+st.round+' - '+st.feed_count+' word'+(st.feed_count===1?'':'s');
+  $('#feed').innerHTML=st.feed.map(f=>`<span class=chip>${esc(f.word)}</span>`).join('')
+    || '<span style="color:var(--mut)">empty - phones, drop a word</span>';
+  $('#busy').innerHTML = d ? `<span class=spin></span>smashing ${d.words} words into comic ${d.round} - ${Math.max(0,Math.round((st.now-d.ms)/1000))}s` : '';
+  $('#go').disabled = !st.can_start || busy;
+  $('#go').textContent = d ? 'drawing comic '+d.round+'...' : 'Go: smash '+st.feed_count+' word'+(st.feed_count===1?'':'s')+' into a comic';
+  $('#note').textContent = 'no timer: Go empties the pot into one four-panel comic, and '+H+' does not survive panel 4';
+  $('#teams').innerHTML = `<span>team Kill <b>${st.players.kill}</b></span><span>team Save <b>${st.players.save}</b></span><span>sides are secret; the storyteller knows</span>`;
+  $('#was').textContent = cur ? 'comic '+cur.round+' was made from: '+cur.all_words.join(', ') : '';
+  const key=cur ? cur.round+':'+(cur.captions||[]).join('|') : '';
+  if(key!==shownStrip){
+    shownStrip=key;
+    $('#stage').innerHTML = cur ? '<div class=strip>'+cur.panels.map((u,i)=>
+      `<div class=panel><span class=num>${i+1}</span><img src="${u}" alt="panel ${i+1}"><div class=cap>${esc((cur.captions||[])[i]||'')}</div></div>`).join('')+'</div>' : '';
+  }
+  if(!cur){
+    $('#stage').innerHTML = `<div class=msg>${d ? 'the storyteller is writing four panels from <b>'+esc(d.all_words.join(', '))+'</b>, then drawing '+H+' into each...' : 'no comic yet - phones drop words, then press Go'}</div>`;
+  }
+}
+$('#go').onclick=async()=>{
+  busy=true; $('#go').disabled=true;
+  try{ const g=await api({action:'start',submit:true}); if(g.error||g.skipped){ $('#busy').textContent=g.error||g.skipped; } }catch(e){}
+  busy=false; tick();
+};
+async function tick(){
+  try{
+    st=await pull();
+    if(st.error){ $('#stage').innerHTML='<div class=msg>'+esc(st.error)+'</div>'; return; }
+    if(st.drawing){ api({action:'advance'}).catch(()=>{}); }
+    render();
+  }catch(e){}
+}
+tick(); setInterval(tick,2500);
+</script>

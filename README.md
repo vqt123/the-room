@@ -6,7 +6,31 @@ their phone; one GPU turns them into a picture on the big screen.
 Built in a day for an internal Comfy hackathon (2026-09-18). It is a hackathon project: the
 code is honest, the edges are rough, and the interesting parts are the design notes below.
 
-## The game, as it ended up
+## Kill or Save (the game for the demo)
+
+Open `kill-screen.html` on the projector and `kill.html` on every phone. One character,
+**Yoland**, drawn from a reference photo. Everyone who joins is put on a **secret side**, team
+Kill or team Save, and told only their own. Everybody drops **single words** into one shared
+pot; every phone and the projector show every word, and nobody can tell whose a word is or
+which side it serves. There is no timer: when the host presses **Go**, the pot is emptied into
+ONE job on the endpoint:
+
+1. an **LLM node** (Gemini, running inside the graph) is told which words were Kill and which
+   were Save and writes a four-panel story in a fixed one-line format: panels 1 to 3 the Kill
+   side's things come at Yoland and the Save side's things rescue him, panel 4 the Kill side
+   gets him, comic-book style;
+2. five core **regex nodes** cut the cast and the four panel descriptions out of that text;
+3. four **sampler passes** draw the panels, each with Yoland's photo as a second reference
+   image next to the blank canvas, so the same person is in all four;
+4. four `SaveImage` nodes write the panels with each **caption as the file name**, which is
+   how the text gets back out of a job that only returns files.
+
+The server copies the four pictures to the blob store and both pages stitch them into a 2 x 2
+strip with the captions. About 45 seconds a round. New words typed while it draws go into the
+next comic. `killctl.sh state|reset|hero|join|word|go` drives it from a shell; `hero` sets the
+main character's photo for a session (kept across resets).
+
+## The Room (the earlier modes)
 
 Open `screen.html` on a projector and `room.html` on every phone. People type a **verb** and a
 **noun** ("juggle" + "walrus"); the server folds each pair into a line that reads naturally
@@ -18,7 +42,7 @@ Three other modes are in the code and selectable per session:
 
 | mode | what happens on Submit |
 |---|---|
-| `story` | everyone's verb + noun go to an **LLM node inside the job**, which writes a two-sentence story containing all of them; the story becomes the image prompt and is shown under the picture (the live one) |
+| `story` | everyone's verb + noun go to an **LLM node inside the job**, which writes a four-panel comic; each panel is drawn as its own picture (with the session's hero photo as the reference, if one is set) and the pages stitch the strip |
 | `pairs` | everyone's verb + noun in one picture, no LLM |
 | `find` | each thing on the list is drawn, then **hidden** in a busy scene; the room races to tap it; each thing goes to whoever finds it first |
 | `mash` | every word on the list in one picture, no hiding |
@@ -110,13 +134,19 @@ attached (both are one click in the Vercel marketplace), and these env vars on t
 | `APP_PASSWORD` | the shared room password; every round spends GPU time |
 | `KV_REST_API_URL`, `KV_REST_API_TOKEN` | from the Redis store |
 | `BLOB_READ_WRITE_TOKEN` | from the Blob store |
-| `COMFY_PARTNER_API_KEY` | a **production** Comfy API key with credits, for the LLM node in `story` mode |
+| `COMFY_PARTNER_API_KEY` | a **production** Comfy API key with credits, for the LLM node in `story` mode and in Kill or Save |
 | `QSTASH_TOKEN` | only if you want the optional clock |
 
 Then, roughly: `cd build && ./release.sh` to bake the pack into a release and deploy it,
 `cd ../vercel-app && ./sync_vercel.sh` to point the site at it, and `./roomctl.sh mode pairs
 main` to pick the game. `roomctl.sh state|reset|add|say|tick|mode` drives a room from a
 shell. One warm GPU means one room at a time.
+
+If Vercel itself is down (it was, mid-hackathon: an incident on triggering deployments), the
+same code runs on a laptop: `vercel env pull prod.env`, then `python local_server.py --env
+prod.env --port 8791` serves the pages and every `api/<name>.py` at `/api/<name>`, and
+`cloudflared tunnel --url http://127.0.0.1:8791` gives phones a public URL. Same Redis, same
+Blob store, same endpoint.
 
 The Go sources for the binary-backed nodes are in `build/ytframe`, `build/hideit` and
 `build/vhstape`; the binaries and the bundled ffmpeg / yt-dlp are not in the repo.

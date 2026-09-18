@@ -9,8 +9,9 @@
 #        mash   - every word typed this window goes into one picture
 #        vn     - one vote each on verbs and nouns; the winning pair gets drawn
 #        vnfind - the winning pair gets drawn AND hidden, and the room has to tap it
-#        story  - like pairs, but an LLM node inside the job writes a story from all the lines first
+#        story  - like pairs, but an LLM node inside the job writes a 4-panel comic from the lines; one picture per panel
 #   ./roomctl.sh say verb|noun "dancing" [sess]  submit into a pool (vn mode)
+#   ./roomctl.sh hero photo.png [sess]   the comic's main character (story mode); "hero clear" drops it
 set -e
 cd "$(dirname "$0")"
 APP="${APP:-https://steal-the-moves-tau.vercel.app}"
@@ -36,6 +37,13 @@ print('mode    :',d['mode'],'| preload ready:',bool(d['preload']))" ;;
            -d "{\"action\":\"reset\",\"sess\":\"${2:-main}\",\"password\":\"$PW\"}" ; echo ;;
   add)   curl -s -X POST "$APP/api/room" -H 'Content-Type: application/json' \
            -d "{\"action\":\"add\",\"sess\":\"${3:-main}\",\"password\":\"$PW\",\"text\":\"$2\",\"name\":\"the shell\",\"voter\":\"shellaaaa1\"}" ; echo ;;
+  hero)  if [ "$2" = "clear" ]; then
+           curl -s -X POST "$APP/api/room" -H 'Content-Type: application/json' \
+             -d "{\"action\":\"hero\",\"clear\":true,\"sess\":\"${3:-main}\",\"password\":\"$PW\"}"
+         else
+           $PY -c "import json,base64,sys;print(json.dumps({'action':'hero','sess':sys.argv[2],'password':sys.argv[3],'image':base64.b64encode(open(sys.argv[1],'rb').read()).decode()}))" "$2" "${3:-main}" "$PW" \
+             | curl -s -X POST "$APP/api/room" -H 'Content-Type: application/json' --data-binary @-
+         fi; echo ;;
   mode)  curl -s -X POST "$APP/api/room" -H 'Content-Type: application/json' \
            -d "{\"action\":\"mode\",\"mode\":\"${2:-find}\",\"sess\":\"${3:-main}\",\"password\":\"$PW\"}" ; echo ;;
   say)   curl -s -X POST "$APP/api/room" -H 'Content-Type: application/json' \
