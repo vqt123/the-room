@@ -297,7 +297,9 @@ function render(){
     shown=key; $('#strip').innerHTML = cur ? pageHtml(cur) : '';
     const h=document.getElementById('hear');
     if(h) h.onclick=()=>{ const list=cur.audio||[]; let i=0;
-      const a=new Audio(); a.onended=a.onerror=()=>{ if(++i<list.length){ a.src=list[i]; a.play().catch(()=>{}); } };
+      const a=new Audio();
+      // A beat of silence between panels, the same as the big screen.
+      a.onended=a.onerror=()=>{ if(++i<list.length) setTimeout(()=>{ a.src=list[i]; a.play().catch(()=>{}); },1400); };
       a.src=list[0]; a.play().catch(()=>{}); };
   }
 }

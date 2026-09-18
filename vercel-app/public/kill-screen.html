@@ -1,36 +1,34 @@
 <!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
-<title>Kill or Save - screen</title>
+<title>Dumbest Ways to Die - screen</title>
 <link rel=preconnect href="https://fonts.googleapis.com"><link rel=preconnect href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Comic+Neue:wght@400;700&display=swap" rel=stylesheet>
 <style>
-/* Same comic language as the phone page, from Alex Tov's mockups (#temp-hck-team-6, 2026-09-18). */
+/* Two screens, one per step (Alex Tov, 2026-09-18): while the room answers, the words own the
+   whole projector; when the comic lands, the comic owns it. A Continue button moves on. */
 :root{--ink:#191c21;--cream:#f6efdc;--gold:#e9bb3f;--green-hi:#a6e84e;--red-hi:#ff7a5c;--mut:#9aa6b4}
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;color:var(--cream);overflow:hidden;
   font:18px/1.45 "Comic Neue",system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
 .bg{position:fixed;inset:0;z-index:-1;
-  background:radial-gradient(circle at 42% 45%, #47525f 0%, #333c47 46%, #212831 100%)}
+  background:radial-gradient(circle at 50% 45%, #47525f 0%, #333c47 46%, #212831 100%)}
 .bg:before{content:"";position:absolute;inset:-20%;background:
-  repeating-conic-gradient(from 0deg at 42% 45%,
+  repeating-conic-gradient(from 0deg at 50% 45%,
     rgba(20,25,32,.42) 0deg .7deg, rgba(255,255,255,0) .7deg 2.2deg,
     rgba(20,25,32,.22) 2.2deg 2.9deg, rgba(255,255,255,0) 2.9deg 4.6deg)}
 .bg:after{content:"";position:absolute;inset:0;
   background:radial-gradient(circle, rgba(15,19,25,.5) 1.4px, rgba(0,0,0,0) 1.7px) 0 0/10px 10px;
-  -webkit-mask-image:radial-gradient(ellipse at 42% 45%, rgba(0,0,0,0) 32%, #000 88%);
-  mask-image:radial-gradient(ellipse at 42% 45%, rgba(0,0,0,0) 32%, #000 88%)}
+  -webkit-mask-image:radial-gradient(ellipse at 50% 45%, rgba(0,0,0,0) 32%, #000 88%);
+  mask-image:radial-gradient(ellipse at 50% 45%, rgba(0,0,0,0) 32%, #000 88%)}
 
-.display{font-family:Bangers,Impact,sans-serif;font-weight:400;letter-spacing:.045em;
-  transform:skewX(-7deg);text-transform:uppercase;line-height:1}
-.grid{display:grid;grid-template-columns:1fr 430px;gap:22px;height:100vh;padding:20px 22px}
-.left{display:flex;flex-direction:column;gap:14px;min-height:0}
-.head{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
-.logo{height:64px;width:auto;display:block;filter:drop-shadow(0 5px 0 rgba(0,0,0,.45))}
-.hero{display:flex;align-items:center;gap:11px;color:var(--mut);font-size:16px}
-.hero img{width:54px;height:54px;border-radius:50%;object-fit:cover;border:4px solid var(--gold);
+.app{display:flex;flex-direction:column;height:100vh;padding:16px 22px 14px;gap:14px}
+.head{display:flex;align-items:center;gap:20px;flex-wrap:wrap;flex:0 0 auto}
+.logo{height:58px;width:auto;display:block;filter:drop-shadow(0 5px 0 rgba(0,0,0,.45))}
+.hero{display:flex;align-items:center;gap:10px;color:var(--mut);font-size:16px}
+.hero img{width:50px;height:50px;border-radius:50%;object-fit:cover;border:4px solid var(--gold);
   box-shadow:0 3px 0 rgba(0,0,0,.45)}
 .roundlbl{font-family:Bangers,Impact,sans-serif;transform:skewX(-7deg);letter-spacing:.06em;
-  font-size:22px;color:var(--gold);text-shadow:2px 2px 0 rgba(0,0,0,.5)}
+  font-size:24px;color:var(--gold);text-shadow:2px 2px 0 rgba(0,0,0,.5)}
 .ctl{margin-left:auto;display:flex;align-items:center;gap:12px}
 button{border:0;cursor:pointer;padding:0;background:none}
 .btn{display:block;border:3px solid #7f8894;border-radius:5px;padding:3px;background:#5c6672;
@@ -44,111 +42,106 @@ button{border:0;cursor:pointer;padding:0;background:none}
 .btn.ghost{background:#39424e;border-color:#5b6673}
 .btn.ghost i{background:none;color:var(--cream);font-size:17px;padding:11px 18px}
 button:active .btn{transform:translateY(3px);box-shadow:0 2px 0 rgba(0,0,0,.4)}
-button:disabled{opacity:.45;cursor:default}
+button:disabled{opacity:.4;cursor:default}
 button:disabled .btn{transform:none}
 
-.stage{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center;
+.screen{flex:1;min-height:0;display:none}
+.screen.on{display:flex}
+
+/* --- step 1: the pot, full width --- */
+.collect{flex-direction:column;align-items:center;justify-content:center;gap:24px;text-align:center}
+.collect h2{font-family:Bangers,Impact,sans-serif;transform:skewX(-7deg);letter-spacing:.06em;
+  font-size:34px;color:var(--gold);margin:0;text-shadow:3px 3px 0 rgba(0,0,0,.5)}
+.collect .sub{color:var(--mut);font-size:20px;margin-top:-14px}
+.bigchips{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;align-items:center;
+  max-width:1500px;max-height:52vh;overflow:auto;padding:4px}
+.bigchip{background:var(--cream);color:var(--ink);border:4px solid var(--ink);border-radius:999px;
+  padding:10px 26px;font-size:30px;font-weight:700;box-shadow:0 5px 0 rgba(0,0,0,.4);
+  animation:pop .35s cubic-bezier(.3,1.5,.5,1)}
+@keyframes pop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+.empty{color:var(--mut);font-size:24px}
+
+/* --- step 2: the comic, full width --- */
+.reveal{gap:20px;align-items:stretch}
+.comicwrap{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;
   background:rgba(15,19,25,.45);border:5px solid var(--ink);border-radius:6px;overflow:hidden;
   box-shadow:0 8px 0 rgba(0,0,0,.4)}
-.stage img.page{max-width:100%;max-height:100%;object-fit:contain;display:block;background:#fff}
-.stage .msg{color:var(--mut);font-size:23px;padding:34px;text-align:center;line-height:1.5;max-width:900px}
-.strip{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:12px;width:100%;height:100%;
-  padding:12px;background:#fff}
+.comicwrap img{max-width:100%;max-height:100%;object-fit:contain;display:block;background:#fff}
+.strip{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:10px;width:100%;height:100%;
+  padding:10px;background:#fff}
 .spanel{position:relative;display:flex;flex-direction:column;min-height:0;min-width:0;background:#fff;
   border:3px solid var(--ink);border-radius:3px;overflow:hidden;color:#111}
 .spanel img{flex:1;min-height:0;width:100%;object-fit:contain;background:#fff}
-.spanel .cap{font-size:16px;line-height:1.3;border-top:3px solid var(--ink);padding:6px 10px;font-weight:700}
+.side{width:440px;flex:0 0 auto;display:flex;flex-direction:column;gap:12px;min-height:0}
+.title2{font-family:Bangers,Impact,sans-serif;transform:skewX(-7deg);font-size:30px;color:#fff;
+  letter-spacing:.03em;text-shadow:3px 3px 0 rgba(0,0,0,.55)}
+.beats{margin:0;padding:0;list-style:none;counter-reset:b;display:grid;gap:10px;overflow:auto;flex:1;min-height:0}
+.beats li{counter-increment:b;position:relative;padding:12px 14px 12px 50px;background:var(--cream);
+  color:var(--ink);border:3px solid var(--ink);border-radius:3px;font-size:19px;line-height:1.35;font-weight:700;
+  transition:box-shadow .2s,transform .2s}
+.beats li:before{content:counter(b);position:absolute;left:10px;top:11px;width:29px;height:29px;
+  background:var(--gold);border:2px solid var(--ink);border-radius:3px;
+  font-family:Bangers,Impact,sans-serif;font-size:17px;color:#3b2f10;text-align:center;line-height:26px}
+.beats li.on{background:#fff;box-shadow:0 0 0 4px var(--gold),0 5px 0 rgba(0,0,0,.4);transform:translateX(4px)}
+.beats li.on:before{background:var(--red-hi)}
+.sidefoot{display:flex;align-items:center;gap:12px;flex:0 0 auto}
 
-.panel{background:var(--cream);color:var(--ink);border:4px solid var(--ink);border-radius:3px;
-  box-shadow:0 5px 0 rgba(0,0,0,.35);padding:13px 17px;position:relative}
-.panel:before{content:"";position:absolute;inset:4px;border:1.5px solid rgba(25,28,33,.45);
-  pointer-events:none;border-radius:2px}
-.panel .n{font-family:Bangers,Impact,sans-serif;transform:skewX(-7deg);letter-spacing:.09em;
-  font-size:13px;color:#6c6350;margin-bottom:3px}
-.panel .body{font-size:20px;line-height:1.35;font-weight:700}
-.join{font-size:17px;color:var(--mut)}
-.join a{color:var(--gold);font-weight:700;text-decoration:underline;text-underline-offset:3px}
-.join a:hover{color:#fff}
-
-.right{display:flex;flex-direction:column;gap:16px;min-height:0}
-.card{background:rgba(15,19,25,.45);border:4px solid rgba(246,239,220,.22);border-radius:6px;padding:16px 18px}
-.card.grow{flex:1;min-height:0;overflow:auto}
-h2{font-family:Bangers,Impact,sans-serif;transform:skewX(-7deg);letter-spacing:.07em;font-size:18px;
-  color:var(--gold);margin:0 0 10px}
-.chips{display:flex;flex-wrap:wrap;gap:9px}
-.chip{background:var(--cream);color:var(--ink);border:3px solid var(--ink);border-radius:999px;
-  padding:7px 17px;font-size:21px;font-weight:700;box-shadow:0 3px 0 rgba(0,0,0,.35)}
-.empty{color:var(--mut);font-size:17px}
-.busy{display:flex;align-items:center;gap:11px;margin-top:14px;color:var(--gold);font-size:18px}
-.spin{width:18px;height:18px;border:3px solid rgba(246,239,220,.3);border-top-color:var(--gold);
+.foot{flex:0 0 auto;display:flex;align-items:center;gap:18px;font-size:17px;color:var(--mut);flex-wrap:wrap}
+.foot a{color:var(--gold);font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.foot a:hover{color:#fff}
+.foot b{color:#fff}
+.busy{display:flex;align-items:center;gap:11px;color:var(--gold);font-size:20px}
+.spin{width:19px;height:19px;border:3px solid rgba(246,239,220,.3);border-top-color:var(--gold);
   border-radius:50%;animation:s .8s linear infinite;flex:0 0 auto}
 @keyframes s{to{transform:rotate(360deg)}}
-.teams{display:flex;gap:16px;font-size:16px;color:var(--mut);flex-wrap:wrap}
-.teams b{color:#fff;font-size:20px}
-.title2{font-family:Bangers,Impact,sans-serif;transform:skewX(-7deg);font-size:24px;color:#fff;
-  letter-spacing:.03em;text-shadow:3px 3px 0 rgba(0,0,0,.55)}
-.beats{margin:12px 0 0;padding:0;list-style:none;counter-reset:b;display:grid;gap:9px}
-.beats li{counter-increment:b;position:relative;padding:10px 12px 10px 46px;background:var(--cream);
-  color:var(--ink);border:3px solid var(--ink);border-radius:3px;font-size:17px;line-height:1.35;font-weight:700}
-.beats li:before{content:counter(b);position:absolute;left:9px;top:9px;width:27px;height:27px;
-  background:var(--gold);border:2px solid var(--ink);border-radius:3px;
-  font-family:Bangers,Impact,sans-serif;font-size:16px;color:#3b2f10;text-align:center;line-height:24px}
-.beats li.on{background:#fff;box-shadow:0 0 0 4px var(--gold),0 5px 0 rgba(0,0,0,.4);transform:translateX(3px)}
-.beats li.on:before{background:var(--red-hi)}
-.speak{display:flex;align-items:center;gap:10px;margin-top:12px;color:var(--mut);font-size:15px}
+.msg{color:var(--mut);font-size:24px;text-align:center;line-height:1.5;max-width:900px;margin:auto}
 </style>
 <div class=bg></div>
-<div class=grid>
-<div class=left>
+<div class=app>
   <div class=head>
     <img class=logo src="assets/logo.png" alt="Dumbest Ways to Die">
     <span class=hero id=hero></span>
     <span class=roundlbl id=roundlbl></span>
-    <span class=ctl>
+    <span class=ctl id=ctl>
       <button id=go><span class=btn><i>Go</i></span></button>
+      <button id=next style="display:none"><span class=btn><i>Continue</i></span></button>
       <button id=reset><span class="btn ghost"><i>Reset</i></span></button>
     </span>
   </div>
-  <div class=stage id=stage><div class=msg>starting up...</div></div>
-  <div class=join>Join on your phone: <a id=url href="kill.html" target="_blank" rel=noopener>-</a> &nbsp;&middot;&nbsp; <span id=note></span></div>
-</div>
-<div class=right>
-  <div class="card grow"><h2 id=fhead>In the pot</h2>
-    <div class=chips id=ideas></div>
-    <div class=busy id=busy style="display:none"></div>
+
+  <div class="screen collect" id=vcollect>
+    <h2 id=chead>In the pot</h2>
+    <div class=sub id=csub></div>
+    <div class=bigchips id=ideas></div>
+    <div class=busy id=cbusy style="display:none"></div>
   </div>
-  <div class=card id=story style="display:none;flex:0 1 auto;overflow:auto">
-    <div class=title2 id=title></div><ol class=beats id=beats></ol>
-    <div class=speak><button id=play style="width:auto"><span class="btn ghost"><i>Read it aloud</i></span></button><span id=speakst></span></div>
+
+  <div class="screen reveal" id=vreveal>
+    <div class=comicwrap id=comic></div>
+    <div class=side>
+      <div class=title2 id=title></div>
+      <ol class=beats id=beats></ol>
+      <div class=sidefoot>
+        <button id=play style="width:auto"><span class="btn ghost"><i>Read it aloud</i></span></button>
+        <span id=speakst style="color:var(--mut);font-size:15px"></span>
+      </div>
+    </div>
   </div>
-  <div class=card style="flex:0 0 auto"><h2>Players</h2><div class=teams id=teams></div></div>
-</div>
+
+  <div class=foot>
+    <span>Join on your phone: <a id=url href="kill.html" target="_blank" rel=noopener>-</a></span>
+    <span id=heads></span>
+    <span id=note></span>
+  </div>
 </div>
 <script>
 const $=s=>document.querySelector(s);
 const SESS=(new URLSearchParams(location.search).get('sess')||'main').toLowerCase().replace(/[^a-z0-9-]/g,'').slice(0,24)||'main';
 const JOINPATH='/kill.html'+(SESS==='main'?'':'?sess='+SESS);
-$('#url').textContent=location.host+JOINPATH;
-$('#url').href=JOINPATH;
-let st=null, busy=false, shown='';
-// Yoland reads his own lines. Autoplay is allowed because the host pressed Go on this page.
-let audio=new Audio(), playRound=null, playIdx=-1, playList=[];
-function markBeat(i){ document.querySelectorAll('#beats li').forEach((el,n)=>el.classList.toggle('on', n===i)); }
-function playFrom(i){
-  playIdx=i;
-  if(i>=playList.length){ markBeat(-1); $('#speakst').textContent=''; return; }
-  markBeat(i); $('#speakst').textContent='panel '+(i+1)+' of '+playList.length;
-  audio.src=playList[i]; audio.play().catch(()=>{ $('#speakst').textContent='tap "Read it aloud" to hear him'; });
-}
-audio.onended=()=>playFrom(playIdx+1);
-audio.onerror=()=>playFrom(playIdx+1);
-function speak(cur, auto){
-  const list=(cur&&cur.audio)||[];
-  if(!list.length){ $('#play').style.display='none'; return; }
-  $('#play').style.display='';
-  playList=list;
-  if(auto && playRound!==cur.round){ playRound=cur.round; playFrom(0); }
-}
+$('#url').textContent=location.host+JOINPATH; $('#url').href=JOINPATH;
+let st=null, busy=false, shownComic='', view='collect', revealed=null;
+let audio=new Audio(), playIdx=-1, playList=[], gapTimer=null;
+const PANEL_GAP_MS=1400;   // a beat of silence between panels, so the room can read and laugh
 
 async function api(body){
   const r=await fetch('/api/kill',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -158,12 +151,29 @@ async function api(body){
 async function pull(){ const r=await fetch(`/api/kill?sess=${encodeURIComponent(SESS)}`); return r.json(); }
 function esc(s){return (s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));}
 
-function stageHtml(cur){
-  if(cur.image) return `<img class=page src="${cur.image}" alt="comic page ${cur.round}">`;
-  if(cur.images) return '<div class=strip>'+cur.images.map((u,i)=>{const p=cur.panels[i]||{};
-    return `<div class=spanel><img src="${u}" alt="panel ${i+1}">`+
-      `<div class=cap>${esc(p.text||p.caption||'')}</div></div>`;}).join('')+'</div>';
+function markBeat(i){ document.querySelectorAll('#beats li').forEach((el,n)=>el.classList.toggle('on', n===i)); }
+function stopSpeaking(){ clearTimeout(gapTimer); gapTimer=null; audio.pause(); markBeat(-1); $('#speakst').textContent=''; }
+function nextPanel(){ gapTimer=setTimeout(()=>playFrom(playIdx+1), PANEL_GAP_MS); }
+function playFrom(i){
+  clearTimeout(gapTimer);
+  playIdx=i;
+  if(i>=playList.length){ markBeat(-1); $('#speakst').textContent=''; return; }
+  markBeat(i); $('#speakst').textContent='panel '+(i+1)+' of '+playList.length;
+  audio.src=playList[i]; audio.play().catch(()=>{ $('#speakst').textContent='tap "Read it aloud"'; });
+}
+audio.onended=nextPanel;
+audio.onerror=nextPanel;
+
+function comicHtml(cur){
+  if(cur.image) return `<img src="${cur.image}" alt="comic page ${cur.round}">`;
+  if(cur.images) return '<div class=strip>'+cur.images.map((u,i)=>
+    `<div class=spanel><img src="${u}" alt="panel ${i+1}"></div>`).join('')+'</div>';
   return '';
+}
+function setView(v){
+  view=v;
+  $('#vcollect').classList.toggle('on', v==='collect');
+  $('#vreveal').classList.toggle('on', v==='reveal');
 }
 
 function render(){
@@ -172,54 +182,70 @@ function render(){
   const heroHtml = st.hero ? `<img src="${st.hero}" alt=""><span>starring ${H}</span>` : `<span>starring ${H}</span>`;
   if($('#hero').innerHTML!==heroHtml) $('#hero').innerHTML=heroHtml;
   $('#roundlbl').textContent = over ? 'The End' : 'Round '+st.round+' of '+st.total_rounds;
-  $('#fhead').textContent = over ? 'The End' : 'In the pot - '+st.answers+' answered';
-  $('#ideas').innerHTML=st.ideas.map(w=>`<span class=chip>${esc(w)}</span>`).join('')
-    || '<span class=empty>Nothing yet. One side is saying what kills him, the other what saves him.</span>';
-  const busyText = busy ? 'The storyteller is writing the story and planning the panels...'
+
+  // A finished round that the room has not been shown yet takes the screen on its own.
+  if(cur && revealed!==cur.round){ revealed=cur.round; setView('reveal'); }
+
+  // --- step 1
+  $('#chead').textContent = over ? 'The End' : 'Round '+st.round+' - in the pot';
+  $('#csub').textContent = over ? 'Reset for a new game'
+    : st.answers ? st.answers+(st.answers===1?' answer':' answers')+' so far. One side is saying what kills him, the other what saves him.'
+    : 'One side is saying what kills him, the other what saves him.';
+  $('#ideas').innerHTML=st.ideas.map(w=>`<span class=bigchip>${esc(w)}</span>`).join('')
+    || '<span class=empty>Nothing yet. Phones, answer your question.</span>';
+  const busyText = busy ? 'The storyteller is writing...'
     : d ? `Drawing round ${d.round}: ${esc(d.title||'')} - ${Math.max(0,Math.round((st.now-d.ms)/1000))}s` : '';
-  $('#busy').style.display = busyText ? '' : 'none';
-  $('#busy').innerHTML = busyText ? '<span class=spin></span><span>'+busyText+'</span>' : '';
-  $('#go').disabled = !st.can_start || busy;
-  $('#go').querySelector('i').textContent = busy ? 'Writing...' : d ? 'Drawing...' : over ? 'Game over' : 'Go ('+st.answers+')';
-  $('#note').textContent = over ? 'Reset for a new game' : 'No timer - Go closes the pot and draws the page';
-  // Only the head count. The per-team split was a leak: with the words on screen the room could
-  // start guessing which side an answer came from (Alex Tov, 2026-09-18).
-  const heads=st.players.kill+st.players.save;
-  $('#teams').innerHTML = `<span><b>${heads}</b> ${heads===1?'player':'players'} in the room</span>`;
+  $('#cbusy').style.display = busyText ? '' : 'none';
+  $('#cbusy').innerHTML = busyText ? '<span class=spin></span><span>'+busyText+'</span>' : '';
+
+  // --- step 2
   if(cur){
-    $('#story').style.display='';
     $('#title').textContent='Round '+cur.round+': '+(cur.title||'');
     const beats=(cur.panels||[]).map(p=>p.text||p.caption||'').filter(Boolean);
-    $('#beats').innerHTML = beats.length ? beats.map(t=>`<li>${esc(t)}</li>`).join('') : `<li>${esc(cur.story||'')}</li>`;
-  } else $('#story').style.display='none';
-  const key=cur ? cur.round+':'+(cur.image||(cur.images||[]).join('|')) : '';
-  if(key!==shown){ shown=key; $('#stage').innerHTML = cur ? stageHtml(cur) : ''; }
-  speak(cur, true);
-  if(!cur){
-    $('#stage').innerHTML = `<div class=msg>${d ? 'Drawing round '+d.round+', <b>'+esc(d.title||'')+'</b>...'
-      : busy ? 'The storyteller is writing...' : 'No page yet. Phones answer their question, then press Go.'}</div>`;
+    const key=cur.round+':'+(cur.image||(cur.images||[]).join('|'));
+    if(key!==shownComic){
+      shownComic=key;
+      $('#comic').innerHTML=comicHtml(cur);
+      $('#beats').innerHTML = beats.map(t=>`<li>${esc(t)}</li>`).join('');
+      playList=cur.audio||[];
+      $('#play').style.display = playList.length ? '' : 'none';
+      if(playList.length) playFrom(0);
+    }
   }
+
+  // --- the controls
+  $('#go').style.display = view==='collect' ? '' : 'none';
+  $('#next').style.display = (view==='reveal' && !over) ? '' : 'none';
+  $('#next').querySelector('i').textContent = 'Onto round '+st.round;
+  $('#go').disabled = !st.can_start || busy;
+  $('#go').querySelector('i').textContent = busy ? 'Writing...' : d ? 'Drawing...' : over ? 'Game over'
+    : 'Go ('+st.answers+')';
+  const heads=st.players.kill+st.players.save;
+  $('#heads').innerHTML = `<b>${heads}</b> ${heads===1?'player':'players'} in the room`;
+  $('#note').textContent = over ? '' : (view==='collect' ? 'No timer - Go closes the pot' : '');
 }
-$('#play').onclick=()=>{ if(playList.length) playFrom(0); };
 $('#go').onclick=async()=>{
   busy=true; render();
-  try{ const g=await api({action:'start',submit:true}); if(g.error||g.skipped){ $('#busy').style.display=''; $('#busy').textContent=g.error||g.skipped; } }catch(e){}
+  try{ const g=await api({action:'start',submit:true}); if(g.error||g.skipped){ $('#cbusy').style.display=''; $('#cbusy').textContent=g.error||g.skipped; } }catch(e){}
   busy=false; tick();
 };
+$('#next').onclick=()=>{ stopSpeaking(); setView('collect'); render(); };
+$('#play').onclick=()=>{ if(playList.length) playFrom(0); };
 $('#reset').onclick=async()=>{
   // Two clicks within five seconds, so a stray press mid-demo does nothing.
   const b=$('#reset'), label=b.querySelector('i');
-  if(b.dataset.armed){ label.textContent='Reset'; delete b.dataset.armed; shown=''; await api({action:'reset'}); tick(); return; }
+  if(b.dataset.armed){ label.textContent='Reset'; delete b.dataset.armed;
+    shownComic=''; revealed=null; stopSpeaking(); setView('collect'); await api({action:'reset'}); tick(); return; }
   b.dataset.armed='1'; label.textContent='Sure?';
   setTimeout(()=>{ if(b.dataset.armed){ delete b.dataset.armed; label.textContent='Reset'; } },5000);
 };
 async function tick(){
   try{
     st=await pull();
-    if(st.error){ $('#stage').innerHTML='<div class=msg>'+esc(st.error)+'</div>'; return; }
+    if(st.error){ $('#ideas').innerHTML='<span class=empty>'+esc(st.error)+'</span>'; return; }
     if(st.drawing){ api({action:'advance'}).catch(()=>{}); }
     render();
   }catch(e){}
 }
-tick(); setInterval(tick,2500);
+setView('collect'); tick(); setInterval(tick,2500);
 </script>

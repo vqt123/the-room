@@ -70,9 +70,13 @@ class Dispatch(SimpleHTTPRequestHandler):
         self._route("do_POST")
 
     def end_headers(self):
-        # The pages are edited live; never let a phone cache one.
-        if self.path.endswith(".html") or self.path in ("/", ""):
-            self.send_header("Cache-Control", "no-cache")
+        # The pages are edited live; never let a browser cache one. The query string has to be
+        # stripped first: "/kill-screen.html?sess=main" does not end in ".html", and that alone
+        # left a stale projector on screen (seen 2026-09-18).
+        path = urlparse(self.path).path
+        if path.endswith(".html") or path in ("/", ""):
+            self.send_header("Cache-Control", "no-store, must-revalidate")
+            self.send_header("Pragma", "no-cache")
         super().end_headers()
 
     def log_message(self, fmt, *args):
