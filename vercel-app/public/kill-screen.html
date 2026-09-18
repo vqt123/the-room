@@ -22,7 +22,7 @@ body{margin:0;color:var(--cream);overflow:hidden;
   mask-image:radial-gradient(ellipse at 50% 45%, rgba(0,0,0,0) 32%, #000 88%)}
 
 .app{display:flex;flex-direction:column;height:100vh;padding:16px 22px 14px;gap:14px}
-.head{display:flex;align-items:center;gap:20px;flex-wrap:wrap;flex:0 0 auto}
+.head{display:flex;align-items:center;gap:20px;flex-wrap:wrap;flex:0 0 auto;position:relative;z-index:10}
 .logo{height:58px;width:auto;display:block;filter:drop-shadow(0 5px 0 rgba(0,0,0,.45))}
 .hero{display:flex;align-items:center;gap:10px;color:var(--mut);font-size:16px}
 .hero img{width:50px;height:50px;border-radius:50%;object-fit:cover;border:4px solid var(--gold);
@@ -95,6 +95,29 @@ button:disabled .btn{transform:none}
   border-radius:50%;animation:s .8s linear infinite;flex:0 0 auto}
 @keyframes s{to{transform:rotate(360deg)}}
 .msg{color:var(--mut);font-size:24px;text-align:center;line-height:1.5;max-width:900px;margin:auto}
+
+/* Go has to read from the back of the room: while a round is being made the whole screen says
+   so, with the stage it is on (Vinh, 2026-09-18). */
+.work{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+  background:rgba(16,20,26,.84);z-index:9}
+.work.on{display:flex}
+.workcard{background:var(--cream);color:var(--ink);border:7px solid var(--ink);border-radius:8px;
+  box-shadow:0 12px 0 rgba(0,0,0,.45);padding:34px 46px 30px;width:min(78vw,1000px);text-align:center;
+  animation:win .32s cubic-bezier(.3,1.4,.5,1)}
+@keyframes win{from{transform:scale(.93);opacity:0}to{transform:scale(1);opacity:1}}
+.workhead{font-family:Bangers,Impact,sans-serif;transform:skewX(-7deg);letter-spacing:.05em;
+  font-size:min(6vw,64px);line-height:1.05;color:var(--ink)}
+.worksub{margin-top:8px;font-size:min(2.4vw,26px);font-weight:700;color:#4a4436}
+.workbar{margin:22px auto 0;height:20px;border:5px solid var(--ink);border-radius:999px;
+  overflow:hidden;background:#ddd2b0}
+.workbar span{display:block;height:100%;width:0;background:
+  repeating-linear-gradient(115deg,#e9bb3f 0 20px,#f6d46a 20px 40px);transition:width .35s linear}
+.workfoot{margin-top:12px;display:flex;align-items:center;justify-content:center;gap:14px;
+  font-size:19px;font-weight:700;color:#6c6250}
+.workspin{width:26px;height:26px;border:5px solid rgba(25,28,33,.2);border-top-color:var(--ink);
+  border-radius:50%;animation:s .8s linear infinite}
+.dots:after{content:"";animation:dots 1.4s steps(4,end) infinite}
+@keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
 </style>
 <div class=bg></div>
 <div class=app>
@@ -128,6 +151,15 @@ button:disabled .btn{transform:none}
     </div>
   </div>
 
+  <div class=work id=work>
+    <div class=workcard>
+      <div class=workhead id=workhead></div>
+      <div class=worksub id=worksub></div>
+      <div class=workbar><span id=workbar></span></div>
+      <div class=workfoot><span class=workspin></span><span id=workfoot></span></div>
+    </div>
+  </div>
+
   <div class=foot>
     <span>Join on your phone: <a id=url href="kill.html" target="_blank" rel=noopener>-</a></span>
     <span id=heads></span>
@@ -140,6 +172,7 @@ const SESS=(new URLSearchParams(location.search).get('sess')||'main').toLowerCas
 const JOINPATH='/kill.html'+(SESS==='main'?'':'?sess='+SESS);
 $('#url').textContent=location.host+JOINPATH; $('#url').href=JOINPATH;
 let st=null, busy=false, shownComic='', view='collect', revealed=null;
+let workD=null, workKey='', skew=0, busyMs=0;
 let audio=new Audio(), playIdx=-1, playList=[], gapTimer=null;
 const PANEL_GAP_MS=1400;   // a beat of silence between panels, so the room can read and laugh
 
@@ -163,6 +196,39 @@ function playFrom(i){
 }
 audio.onended=nextPanel;
 audio.onerror=nextPanel;
+
+// The three stages of making a round, with how long each usually takes so the bar moves at
+// about the right speed. `busy` is the local optimistic one: the host's own click, before the
+// first poll comes back.
+function stageCopy(stage, H){
+  if(stage==='writing') return {h:'Smashing your words together',
+    s:'Every answer in the pot is going into one story.', t:45};
+  if(stage==='voicing') return {h:H+' is finding his voice',
+    s:'Recording him narrating all four panels.', t:12};
+  return {h:'Drawing the comic', s:'Four panels, one page, drawn in one shot.', t:28};
+}
+function renderWork(){
+  const d=st&&st.drawing;
+  const stage = d ? (d.stage||'drawing') : (busy?'writing':'');
+  if(!stage){ workD=null; workKey=''; $('#work').classList.remove('on'); return; }
+  workD={stage:stage, ms:(d?d.ms:(busyMs||Date.now()+skew))};
+  const S=stageCopy(stage, esc(st?st.hero_name:'He'));
+  const key=(d?d.round:0)+':'+stage;
+  if(key!==workKey){
+    workKey=key;
+    $('#workhead').innerHTML=esc(S.h)+'<span class=dots></span>';
+    $('#worksub').textContent=S.s;
+  }
+  $('#work').classList.add('on');
+  paintWork();
+}
+function paintWork(){
+  if(!workD||!$('#work').classList.contains('on')) return;
+  const secs=Math.max(0,(Date.now()+skew-workD.ms)/1000);
+  $('#workfoot').textContent=Math.round(secs)+'s';
+  $('#workbar').style.width=Math.min(96, 6+secs/stageCopy(workD.stage,'He').t*90)+'%';
+}
+setInterval(paintWork,250);
 
 function comicHtml(cur){
   if(cur.image) return `<img src="${cur.image}" alt="comic page ${cur.round}">`;
@@ -193,10 +259,7 @@ function render(){
     : 'One side is saying what kills him, the other what saves him.';
   $('#ideas').innerHTML=st.ideas.map(w=>`<span class=bigchip>${esc(w)}</span>`).join('')
     || '<span class=empty>Nothing yet. Phones, answer your question.</span>';
-  const busyText = busy ? 'The storyteller is writing...'
-    : d ? `Drawing round ${d.round} - ${Math.max(0,Math.round((st.now-d.ms)/1000))}s` : '';
-  $('#cbusy').style.display = busyText ? '' : 'none';
-  $('#cbusy').innerHTML = busyText ? '<span class=spin></span><span>'+busyText+'</span>' : '';
+  renderWork();
 
   // --- step 2
   if(cur){
@@ -218,16 +281,21 @@ function render(){
   $('#next').style.display = (view==='reveal' && !over) ? '' : 'none';
   $('#next').querySelector('i').textContent = 'Onto round '+st.round;
   $('#go').disabled = !st.can_start || busy;
-  $('#go').querySelector('i').textContent = busy ? 'Writing...' : d ? 'Drawing...' : over ? 'Game over'
+  $('#go').querySelector('i').textContent = (busy||d) ? 'Working...' : over ? 'Game over'
     : 'Go ('+st.answers+')';
   const heads=st.players.kill+st.players.save;
   $('#heads').innerHTML = `<b>${heads}</b> ${heads===1?'player':'players'} in the room`;
   $('#note').textContent = over ? '' : (view==='collect' ? 'No timer - Go closes the pot' : '');
 }
 $('#go').onclick=async()=>{
-  busy=true; render();
-  try{ const g=await api({action:'start',submit:true}); if(g.error||g.skipped){ $('#cbusy').style.display=''; $('#cbusy').textContent=g.error||g.skipped; } }catch(e){}
-  busy=false; tick();
+  // The call itself blocks for as long as the writer takes, so the overlay goes up here rather
+  // than waiting for a poll to notice.
+  busy=true; busyMs=Date.now()+skew; workKey=''; render();
+  try{
+    const g=await api({action:'start',submit:true});
+    if(g.error||g.skipped){ $('#cbusy').style.display=''; $('#cbusy').textContent=g.error||g.skipped; }
+  }catch(e){}
+  busy=false; busyMs=0; tick();
 };
 $('#next').onclick=()=>{ stopSpeaking(); setView('collect'); render(); };
 $('#play').onclick=()=>{ if(playList.length) playFrom(0); };
@@ -243,9 +311,12 @@ async function tick(){
   try{
     st=await pull();
     if(st.error){ $('#ideas').innerHTML='<span class=empty>'+esc(st.error)+'</span>'; return; }
+    skew=st.now-Date.now();
     if(st.drawing){ api({action:'advance'}).catch(()=>{}); }
     render();
   }catch(e){}
 }
-setView('collect'); tick(); setInterval(tick,2500);
+setView('collect'); tick();
+// Faster while a round is being made, so the stage changes land as they happen.
+(function loop(){ setTimeout(async()=>{ await tick(); loop(); }, (st&&st.drawing)?1200:2500); })();
 </script>

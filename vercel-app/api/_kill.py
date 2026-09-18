@@ -28,7 +28,8 @@ State is one Redis hash per session, `ks:<sess>`:
   n:<r>           json the round record: the Smash's JSON plus job, verdict, pools, render, ms,
                   done_ms / error, images
 plus `ks:<sess>:hero` (photo URL), `:rounds`, `:render` (page | pro | panels), `:verdict`
-(override for the next round), all kept across resets, and two short locks.
+(override for the next round), all kept across resets, `:busy` (the stage marker every screen
+shows while a round is being made) and two short locks.
 """
 import json, os, random, re, secrets, sys, time
 
@@ -43,6 +44,9 @@ LOCK_MS = 120_000
 STUCK_MS = 240_000
 PAGE_MS = 25_000             # a Nano Banana page, for the countdown on screen
 PANELS_MS = 55_000
+WRITE_MS = 45_000            # the Smash call, for the bar on the phones while it runs
+VOICE_MS = 12_000            # the four speech calls at the end of a round
+BUSY_MS = 300_000            # the stage marker's own expiry, so a crashed Go never sticks
 # The image model will happily draw a fifth frame if the page leaves room, so the count is
 # restated by us at the end of the prompt rather than trusted to the writer (seen 2026-09-18).
 PAGE_TAIL = (" Dynamic manga-style comic page in wide landscape: exactly four panels of different sizes and shapes, "
@@ -66,6 +70,32 @@ def _unlock(key):
         _kv.cmd("DEL", key)
     except Exception:  # noqa: BLE001
         pass
+
+
+# ---- the stage marker -------------------------------------------------------------------------
+# Go used to be silent: the Smash call runs inside the request that starts the round, and the
+# round record is only written once it comes back, so for the first half minute every phone
+# looked exactly as it did before the host pressed anything. This marker is written first and
+# read by state(), so the room sees the work start immediately (Vinh, 2026-09-18).
+
+def set_busy(sess, r, stage):
+    try:
+        _kv.cmd("SET", f"ks:{sess}:busy", json.dumps({"r": int(r), "stage": stage,
+                                                      "ms": int(time.time() * 1000)}), "PX", BUSY_MS)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def clear_busy(sess):
+    _unlock(f"ks:{sess}:busy")
+
+
+def get_busy(sess):
+    try:
+        raw = _kv.cmd("GET", f"ks:{sess}:busy")
+        return json.loads(raw) if raw else None
+    except Exception:  # noqa: BLE001
+        return None
 
 
 # ---- per-session settings (kept across resets) ----------------------------------------------
@@ -284,10 +314,26 @@ def state(sess, voter=None):
                 row["image"] = f"{base}/{_path(sess, rec)}{v}"
         else:
             row["state"] = "drawing"
+            row["stage"] = "drawing"
             row["eta_ms"] = max(0, rec["ms"] + (PANELS_MS if rec.get("render") == "panels" else PAGE_MS) - now)
             if now - rec["ms"] < STUCK_MS:
                 drawing = row
         pages.append(row)
+    # Between Go and the job being submitted there is no record yet, and at the end of a round
+    # the speech is made after the picture is stored: both are real work with nothing on screen,
+    # so the marker fills them in and every client gets one "drawing" row with a stage on it.
+    busy = get_busy(sess)
+    if busy and now - busy["ms"] < STUCK_MS:
+        rec = rounds.get(busy["r"])
+        if rec is None or not (rec.get("done_ms") or rec.get("error")):
+            if drawing is None:
+                drawing = {"round": busy["r"], "state": "drawing", "stage": busy["stage"], "ms": busy["ms"],
+                           "panels": [], "words": [],
+                           "eta_ms": max(0, busy["ms"] + (VOICE_MS if busy["stage"] == "voicing" else WRITE_MS) - now)}
+            else:
+                drawing["stage"] = busy["stage"]
+                if busy["stage"] == "voicing":
+                    drawing["eta_ms"] = max(0, busy["ms"] + VOICE_MS - now)
     done = [p for p in pages if p["state"] == "done"]
     finished = len(rounds) >= total and all(rec.get("done_ms") or rec.get("error") for rec in rounds.values())
     me = players.get(voter) if voter else None
@@ -339,6 +385,8 @@ def start(sess):
             return {"skipped": "no words in the pot yet"}
         players, answers, rounds, meta = _load(sess)
         r, total = meta["round"], st["total_rounds"]
+        # Every screen learns the round has closed on its next poll, not when the writer finishes.
+        set_busy(sess, r, "writing")
         pools = _pools(players, answers.get(r, {}))
         verdict = verdict_for(sess, r)
         previous = [{"round": n, "verdict": rounds[n]["verdict"].upper(), "outcome": rounds[n].get("outcome", "")}
@@ -392,6 +440,9 @@ def start(sess):
         return {"round": r, "job": job.id, "verdict": verdict, "title": rec["title"], "panels": len(panels),
                 "render": render, "next_scene": rec["next_scene"]}
     finally:
+        # The record now carries the round, or the Smash failed and nothing should still say
+        # "writing"; either way the marker's job is over.
+        clear_busy(sess)
         _unlock(f"ks:{sess}:lock")
 
 
@@ -473,6 +524,7 @@ def publish(sess, round_no):
         return _retry(sess, rec, e)
     # Yoland reads his own lines. The four calls run together, so this costs a couple of
     # seconds; a failure here must never cost the round, so the page still publishes.
+    set_busy(sess, rec["r"], "voicing")
     try:
         lines = [str(p.get("text") or p.get("caption") or "") for p in (rec.get("panels") or [])]
         clips = _voice.say_all(lines, get_voice(sess)) if any(lines) else []
@@ -488,6 +540,7 @@ def publish(sess, round_no):
         rec["voice_error"] = str(e)[:160]
     rec["done_ms"] = int(time.time() * 1000)
     _kv.pipe([["HSET", _k(sess), f"n:{rec['r']}", json.dumps(rec)], ["EXPIRE", _k(sess), TTL_S]])
+    clear_busy(sess)
     return {"state": "done", "round": rec["r"], "clips": rec.get("audio", 0)}
 
 

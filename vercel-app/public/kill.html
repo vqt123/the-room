@@ -132,12 +132,29 @@ h3{font-family:Bangers,Impact,sans-serif;transform:skewX(-7deg);letter-spacing:.
 .beats li:before{content:counter(b);position:absolute;left:9px;top:9px;width:25px;height:25px;
   background:var(--gold);border:2px solid var(--ink);border-radius:3px;
   font-family:Bangers,Impact,sans-serif;font-size:15px;color:#3b2f10;text-align:center;line-height:22px}
-.busy{display:flex;align-items:center;gap:11px;margin-top:16px;background:rgba(20,25,32,.5);
-  border:3px solid rgba(246,239,220,.25);border-radius:4px;padding:13px}
-.busy b{color:var(--gold)}
-.spin{width:17px;height:17px;border:3px solid rgba(246,239,220,.3);border-top-color:var(--gold);
+/* While a round is being made the phone must say so loudly: the host presses Go on the other
+   side of the room and nothing else on this screen changes (Vinh, 2026-09-18). */
+.busy{margin:0 0 18px;background:var(--cream);color:var(--ink);border:4px solid var(--ink);
+  border-radius:5px;padding:14px 15px 13px;box-shadow:0 6px 0 rgba(0,0,0,.4);
+  animation:bin .3s cubic-bezier(.3,1.4,.5,1)}
+@keyframes bin{from{transform:scale(.95);opacity:0}to{transform:scale(1);opacity:1}}
+.busy .row{display:flex;align-items:center;gap:11px}
+.busy .head{font-family:Bangers,Impact,sans-serif;transform:skewX(-7deg);letter-spacing:.05em;
+  font-size:25px;line-height:1.05;color:var(--ink)}
+.busy .secs{margin-left:auto;font-weight:700;font-size:14px;color:#6c6250;flex:0 0 auto}
+.busy .sub{margin-top:5px;font-size:14px;font-weight:700;color:#4a4436}
+.busy .note{margin-top:3px;font-size:13px;color:#6c6250}
+.bar{margin-top:10px;height:11px;border:3px solid var(--ink);border-radius:999px;overflow:hidden;
+  background:#ddd2b0}
+.bar span{display:block;height:100%;width:0;background:
+  repeating-linear-gradient(115deg,#e9bb3f 0 13px,#f6d46a 13px 26px);
+  transition:width .35s linear}
+.dots:after{content:"";animation:dots 1.4s steps(4,end) infinite}
+@keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+.spin{width:22px;height:22px;border:4px solid rgba(25,28,33,.2);border-top-color:var(--ink);
   border-radius:50%;animation:s .8s linear infinite;flex:0 0 auto}
 @keyframes s{to{transform:rotate(360deg)}}
+#answer.shut{opacity:.45;pointer-events:none}
 </style>
 <div class=bg></div>
 <div class=wrap>
@@ -171,6 +188,8 @@ h3{font-family:Bangers,Impact,sans-serif;transform:skewX(-7deg);letter-spacing:.
 <div id=game style="display:none">
   <div class=panel id=scene style="display:none"><div class=n>The story so far</div><div class=caption id=scenetext></div></div>
 
+  <div id=next></div>
+
   <div class=burstwrap><div class=burst id=burst><span id=burstnum>0</span></div><div class=bcap id=bcap></div></div>
 
   <div id=answer>
@@ -186,7 +205,6 @@ h3{font-family:Bangers,Impact,sans-serif;transform:skewX(-7deg);letter-spacing:.
   <h3>Everyone's answers</h3>
   <div class=chips id=ideas></div>
   <button class=peek id=peek>show my team again</button>
-  <div id=next></div>
   <div id=strip></div>
 </div>
 </div>
@@ -273,6 +291,48 @@ function pageHtml(cur){
   return `<div class="title2 display">Round ${cur.round}: ${esc(cur.title||'')}</div>`+body+told+hear;
 }
 
+// The three stages a round goes through, with how long each usually takes, so the bar moves at
+// about the right speed instead of jumping.
+function stageCopy(stage){
+  if(stage==='writing') return {h:'Smashing your words together',
+    s:'Every answer in the pot is going into one story.',
+    n:'Answers for this round are closed.', t:45};
+  if(stage==='voicing') return {h:heroName+' is finding his voice',
+    s:'Recording him narrating all four panels.',
+    n:'Almost on screen.', t:12};
+  return {h:'Drawing the comic', s:'Four panels, one page, drawn in one shot.',
+    n:'You can already answer for the next round.', t:28};
+}
+let busyD=null, busyKey='', skew=0;
+function renderBusy(){
+  const d=st&&st.drawing;
+  if(!d){ busyD=null; if(busyKey){ busyKey=''; $('#next').innerHTML=''; } $('#answer').classList.remove('shut'); return; }
+  busyD=d;
+  const stage=d.stage||'drawing', S=stageCopy(stage), key=d.round+':'+stage;
+  if(key!==busyKey){
+    busyKey=key;
+    $('#next').innerHTML='<div class=busy>'
+      +'<div class=row><span class=spin></span><div class=head>'+esc(S.h)+'<span class=dots></span></div>'
+      +'<span class=secs id=busysecs></span></div>'
+      +'<div class=sub>'+esc(S.s)+'</div>'
+      +'<div class=bar><span id=busybar></span></div>'
+      +'<div class=note>'+esc(S.n)+'</div></div>';
+  }
+  // While the story is being written the pot is already closed: anything typed now would be
+  // read by nobody, so the field shuts rather than quietly losing the answer.
+  $('#answer').classList.toggle('shut', stage==='writing');
+  paintBusy();
+}
+function paintBusy(){
+  if(!busyD) return;
+  const el=document.getElementById('busysecs'), bar=document.getElementById('busybar');
+  if(!el||!bar) return;
+  const secs=Math.max(0,(Date.now()+skew-busyD.ms)/1000);
+  el.textContent=Math.round(secs)+'s';
+  bar.style.width=Math.min(96, 6+secs/stageCopy(busyD.stage||'drawing').t*90)+'%';
+}
+setInterval(paintBusy,250);
+
 function render(){
   const me=st.me;
   heroName=st.hero_name||heroName;
@@ -288,9 +348,7 @@ function render(){
   if(filledRound!==st.round){ filledRound=st.round; $('#idea').value=(st.mine&&st.mine.idea)||''; if(!st.mine) $('#addst').textContent=''; }
   const mine=st.mine?st.mine.idea:'';
   $('#ideas').innerHTML=st.ideas.map(w=>`<span class="chip${w===mine?' mine':''}">${esc(w)}</span>`).join('')||'<span class=hint>Nothing yet.</span>';
-  const d=st.drawing;
-  $('#next').innerHTML = d ? `<div class=busy><span class=spin></span><div><b>Drawing round ${d.round}</b> &middot; ${Math.max(0,Math.round((st.now-d.ms)/1000))}s`
-    +`<div class=hint style="margin-top:2px">You can already answer for the next round.</div></div></div>` : '';
+  renderBusy();
   const cur=st.current;
   const key=cur ? cur.round+':'+(cur.image||(cur.images||[]).join('|')) : '';
   if(key!==shown){
@@ -308,10 +366,13 @@ async function tick(){
   try{
     st=await pull();
     if(st.error){ $('#addst').className='status err'; $('#addst').textContent=st.error; return; }
+    skew=st.now-Date.now();
     if(st.drawing){ api({action:'advance'}).catch(()=>{}); }
     render();
   }catch(e){}
 }
-setInterval(tick,2500);
+// Faster while a round is being made: the stage changes are the feedback, so they should not
+// sit a poll behind.
+(function loop(){ setTimeout(async()=>{ await tick(); loop(); }, st&&st.drawing?1200:2500); })();
 if(NAME){ api({action:'join'}).then(g=>{ if(!g.error){ cardSeen=!!g.returning; enter(g.team); } }).catch(()=>{}); }
 </script>
