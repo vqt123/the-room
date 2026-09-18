@@ -96,6 +96,18 @@ button:disabled .btn{transform:none}
 @keyframes s{to{transform:rotate(360deg)}}
 .msg{color:var(--mut);font-size:24px;text-align:center;line-height:1.5;max-width:900px;margin:auto}
 
+/* The join code, generated in the page from this screen's own address. A QR baked into an image
+   file would encode whatever tunnel was live when it was made; the tunnel changes every restart,
+   so the room would scan a dead link (2026-09-18). */
+.qr{position:fixed;right:22px;bottom:58px;z-index:8;background:var(--cream);border:5px solid var(--ink);
+  border-radius:6px;box-shadow:0 8px 0 rgba(0,0,0,.45);padding:14px 14px 10px;text-align:center;display:none}
+.qr.on{display:block}
+.qr canvas,.qr img{display:block;width:216px;height:216px;image-rendering:pixelated}
+.qr .cap{margin-top:8px;font-family:Bangers,Impact,sans-serif;transform:skewX(-7deg);letter-spacing:.05em;
+  font-size:23px;color:var(--ink)}
+.qr .u{font-size:13px;font-weight:700;color:#6c6250;max-width:216px;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+
 /* Go has to read from the back of the room: while a round is being made the whole screen says
    so, with the stage it is on (Vinh, 2026-09-18). */
 .work{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
@@ -151,6 +163,8 @@ button:disabled .btn{transform:none}
     </div>
   </div>
 
+  <div class=qr id=qr><div id=qrbox></div><div class=cap>Scan to play</div><div class=u id=qru></div></div>
+
   <div class=work id=work>
     <div class=workcard>
       <div class=workhead id=workhead></div>
@@ -171,10 +185,27 @@ const $=s=>document.querySelector(s);
 const SESS=(new URLSearchParams(location.search).get('sess')||'main').toLowerCase().replace(/[^a-z0-9-]/g,'').slice(0,24)||'main';
 const JOINPATH='/kill.html'+(SESS==='main'?'':'?sess='+SESS);
 $('#url').textContent=location.host+JOINPATH; $('#url').href=JOINPATH;
+// The QR encodes this screen's own origin, so it is right whatever tunnel is live.
+(function(){
+  const join=location.origin+JOINPATH;
+  $('#qru').textContent=location.host;
+  const sc=document.createElement('script');
+  sc.src='https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+  // The library lands after the first setView, so this reveals the card itself rather than
+  // waiting for a view change that may never come.
+  sc.onload=()=>{ try{
+    new QRCode($('#qrbox'), {text:join, width:216, height:216,
+      colorDark:'#191c21', colorLight:'#f6efdc', correctLevel:QRCode.CorrectLevel.M});
+    $('#qr').classList.toggle('on', view==='collect');
+  }catch(e){} };
+  // No network for the library, no QR: the footer already prints the address to type.
+  sc.onerror=()=>{ $('#qr').classList.remove('on'); };
+  document.head.appendChild(sc);
+})();
 let st=null, busy=false, shownComic='', view='collect', revealed=null;
 let workD=null, workKey='', skew=0, busyMs=0;
 let audio=new Audio(), playIdx=-1, playList=[], gapTimer=null;
-const PANEL_GAP_MS=1500;   // a beat of silence between panels, so the room can read and laugh
+const PANEL_GAP_MS=1000;   // a beat of silence between panels, so the room can read and laugh
 
 async function api(body){
   const r=await fetch('/api/kill',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -240,6 +271,8 @@ function setView(v){
   view=v;
   $('#vcollect').classList.toggle('on', v==='collect');
   $('#vreveal').classList.toggle('on', v==='reveal');
+  // It belongs on the screen people are joining from, not over the comic.
+  $('#qr').classList.toggle('on', v==='collect' && !!$('#qrbox').firstChild);
 }
 
 function render(){

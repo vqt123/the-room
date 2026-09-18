@@ -225,7 +225,7 @@ if(!VOTER){VOTER=Math.random().toString(36).slice(2,12).replace(/[^a-z0-9]/g,'x'
 let NAME=localStorage.getItem('room_name')||'';
 $('#name').value=NAME;
 let st=null, joined=false, shown='', filledRound=0, cardSeen=false, heroName='Yoland';
-const PANEL_GAP_MS=1500;   // silence between panels while Yoland reads
+const PANEL_GAP_MS=1000;   // silence between panels while Yoland reads
 
 async function api(body){
   const r=await fetch('/api/kill',{method:'POST',headers:{'Content-Type':'application/json'},
