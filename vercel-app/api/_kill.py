@@ -203,6 +203,13 @@ def say(sess, voter, noun=None, verb=None):
 
 # ---- the shared view --------------------------------------------------------------------------
 
+def _path(sess, rec, panel=None):
+    tag = f"-{rec['tag']}" if rec.get("tag") else ""
+    if panel:
+        return f"ks/{sess}/r{rec['r']}{tag}-p{panel}.png"
+    return f"ks/{sess}/page{rec['r']}{tag}.png"
+
+
 def _pools(players, answers_r):
     pools = {t: {"nouns": [], "verbs": []} for t in TEAMS}
     for voter, a in answers_r.items():
@@ -241,10 +248,15 @@ def state(sess, voter=None):
             row["error"] = rec["error"]
         elif rec.get("done_ms"):
             row["state"] = "done"
+            row["done_ms"] = rec["done_ms"]
+            # Every game's files carry their own tag: after a reset, round 1 must not reuse the
+            # old round 1's file name, or browsers (and the pages' "is it new" check) keep the
+            # old picture. Records from before the tag get a version query instead.
+            v = "" if rec.get("tag") else f"?v={rec['done_ms']}"
             if rec.get("render") == "panels":
-                row["images"] = [f"{base}/ks/{sess}/r{n}-p{i}.png" for i in range(1, rec.get("images", 0) + 1)]
+                row["images"] = [f"{base}/{_path(sess, rec, i)}{v}" for i in range(1, rec.get("images", 0) + 1)]
             else:
-                row["image"] = f"{base}/ks/{sess}/page{n}.png"
+                row["image"] = f"{base}/{_path(sess, rec)}{v}"
         else:
             row["state"] = "drawing"
             row["eta_ms"] = max(0, rec["ms"] + (PANELS_MS if rec.get("render") == "panels" else PAGE_MS) - now)
@@ -347,10 +359,11 @@ def start(sess):
         if hero and "2" in g:
             wf.set_input("2", "image", c.assets.from_bytes(hero, filename="hero.png"))
         if use_prev:
-            prev = _fetch(f"{_blob.base_url()}/ks/{sess}/page{prev_done[-1]}.png")
+            prev = _fetch(f"{_blob.base_url()}/{_path(sess, rounds[prev_done[-1]])}")
             wf.set_input("4", "image", c.assets.from_bytes(prev, filename="prev.png"))
         job = c.submit(wf, api_key=_llm.partner_key())
         rec = {"r": r, "job": job.id, "verdict": verdict, "render": render, "ms": int(time.time() * 1000),
+               "tag": secrets.token_hex(3),
                "seed": seed, "scene": meta["scene"], "kill": pools["kill"], "save": pools["save"],
                "title": plan.get("title"), "story": plan.get("story"), "outcome": plan.get("outcome"),
                "layout": plan.get("layout"), "panels": panels, "page_prompt": plan.get("page_prompt"),
@@ -387,11 +400,11 @@ def publish(sess, round_no):
     if rec.get("render") == "panels":
         panels = story_panels(rec["job"])
         for i, p in enumerate(panels, 1):
-            _blob.put(f"ks/{sess}/r{rec['r']}-p{i}.png", _fetch(p["url"], 60), "image/png")
+            _blob.put(_path(sess, rec, i), _fetch(p["url"], 60), "image/png")
         rec["images"] = len(panels)
     else:
         out = _output(client().jobs.get(rec["job"]), "31")
-        _blob.put(f"ks/{sess}/page{rec['r']}.png", _fetch(str(out.get_download_url().url), 60), "image/png")
+        _blob.put(_path(sess, rec), _fetch(str(out.get_download_url().url), 60), "image/png")
     rec["done_ms"] = int(time.time() * 1000)
     _kv.pipe([["HSET", _k(sess), f"n:{rec['r']}", json.dumps(rec)], ["EXPIRE", _k(sess), TTL_S]])
     return {"state": "done", "round": rec["r"]}
