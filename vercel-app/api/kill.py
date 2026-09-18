@@ -7,7 +7,7 @@ from urllib.parse import parse_qs, urlparse
 # Appended, not prepended: api/queue.py would otherwise shadow the standard
 # library's queue module for anything these handlers import.
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from _kill import advance, config, join, publish, reset, say, set_hero, start, state
+from _kill import advance, config, join, publish, reset, say, set_hero, set_voice, start, state
 
 SESS_OK = set("abcdefghijklmnopqrstuvwxyz0123456789-")
 
@@ -59,6 +59,13 @@ class handler(BaseHTTPRequestHandler):
                 return self._json(publish(sess, body.get("round")))
             if action == "advance":
                 return self._json(advance(sess))
+            if action == "voice":
+                # Either an ElevenLabs voice id, or base64 audio to clone Yoland from.
+                clips = body.get("audio") or []
+                samples = [(c.get("name") or f"sample{i}.mp3", base64.b64decode(c["data"]))
+                           for i, c in enumerate(clips, 1) if c.get("data")]
+                return self._json(set_voice(sess, body.get("voice"), samples or None,
+                                            body.get("name") or "Yoland"))
             if action == "hero":
                 raw = base64.b64decode(body.get("image") or "") if body.get("image") else None
                 return self._json(set_hero(sess, raw, clear=bool(body.get("clear"))))

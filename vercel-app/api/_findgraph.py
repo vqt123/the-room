@@ -565,12 +565,13 @@ def build_kill(kill_words, save_words, seed=1234, hero=True):
 
 # ---- Kill or Save, the team's prompts: one comic page per round, or four panels ---------------
 
-def build_page(page_prompt, seed=42, aspect="1:1", previous_page=False, pro=False):
+def build_page(page_prompt, seed=42, aspect="16:9", previous_page=False, pro=False):
     """The artifact's render step as one job: a Nano Banana API node draws the whole comic page
     (panels, gutters, lettering) from the Smash's page_prompt, with the hero's photo as the
     first reference image and, from round 2, the previous page as the second. Both references
     are scaled to the page's shape and batched, because the node takes one IMAGE input."""
-    w, h = (768, 1024) if aspect == "3:4" else (1024, 1024)   # references are scaled to the page shape
+    # references are scaled to the page's own shape before they are batched
+    w, h = {"3:4": (768, 1024), "16:9": (1280, 720), "1:1": (1024, 1024)}.get(aspect, (1024, 1024))
     g = {}
     g["2"] = {"class_type": "LoadImage", "_meta": {"title": "the hero's photo"}, "inputs": {"image": "hero.png"}}
     g["3"] = {"class_type": "ImageScale", "_meta": {"title": "hero, page-shaped"},
@@ -584,15 +585,14 @@ def build_page(page_prompt, seed=42, aspect="1:1", previous_page=False, pro=Fals
         g["6"] = {"class_type": "ImageBatch", "_meta": {"title": "hero + previous page"},
                   "inputs": {"image1": ["3", 0], "image2": ["5", 0]}}
         refs = ["6", 0]
-    if pro:
-        g["20"] = {"class_type": "GeminiImage2Node", "_meta": {"title": "draw the page (Nano Banana Pro)"},
-                   "inputs": {"prompt": page_prompt, "model": "gemini-3-pro-image-preview", "seed": seed % 2147483647,
-                              "aspect_ratio": aspect, "resolution": "1K", "response_modalities": "IMAGE",
-                              "images": refs}}
-    else:
-        g["20"] = {"class_type": "GeminiImageNode", "_meta": {"title": "draw the page (Nano Banana)"},
-                   "inputs": {"prompt": page_prompt, "model": "gemini-2.5-flash-image", "seed": seed % 2147483647,
-                              "aspect_ratio": aspect, "response_modalities": "IMAGE", "images": refs}}
+    # Team 6's bake-off (docs/comic-image-spec.md, 2026-09-18) landed on Nano Banana 2 at 16:9;
+    # the Pro model is a notch cleaner at the same speed, so it is one flag away.
+    g["20"] = {"class_type": "GeminiImage2Node",
+               "_meta": {"title": "draw the page (Nano Banana " + ("Pro" if pro else "2") + ")"},
+               "inputs": {"prompt": page_prompt,
+                          "model": "gemini-3-pro-image-preview" if pro else "Nano Banana 2 (Gemini 3.1 Flash Image)",
+                          "seed": seed % 2147483647, "aspect_ratio": aspect, "resolution": "1K",
+                          "response_modalities": "IMAGE", "images": refs}}
     g["31"] = {"class_type": "SaveImage", "_meta": {"title": "the page"},
                "inputs": {"images": ["20", 0], "filename_prefix": "page"}}
     return g

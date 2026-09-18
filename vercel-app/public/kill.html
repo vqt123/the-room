@@ -1,84 +1,197 @@
 <!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Kill or Save</title>
+<link rel=preconnect href="https://fonts.googleapis.com"><link rel=preconnect href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Comic+Neue:wght@400;700&display=swap" rel=stylesheet>
 <style>
-:root{--bg:#0b0d12;--card:#161922;--ink:#eceff5;--mut:#8f97a6;--acc:#ffd23c;--ok:#5ddc97;--bad:#ff6b6b}
+/* The look is Alex Tov's comic mockups (#temp-hck-team-6, 2026-09-18): dark speed-line paper,
+   cream panels with heavy ink borders, gold bursts, and a secret team card. Every texture is
+   CSS, so there is nothing to download and nothing to keep in sync. */
+:root{
+  --ink:#191c21; --slate-d:#2a323c;
+  --cream:#f6efdc; --paper:#efe5c8; --gold:#e9bb3f;
+  --green-hi:#a6e84e; --red-hi:#ff7a5c;
+  --mut:#9aa6b4;
+}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-.wrap{max-width:620px;margin:0 auto;padding:16px 14px 60px}
-h1{font-size:28px;margin:0 0 2px;letter-spacing:.02em}
-.sub{color:var(--mut);margin:0 0 14px;font-size:14px}
-.card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:12px}
-input[type=text]{width:100%;padding:11px 12px;border-radius:8px;border:1px solid #2a2f3a;background:#0b0d12;color:var(--ink);font-size:16px}
-button{padding:12px 14px;border:0;border-radius:10px;background:var(--acc);color:#1a1400;font-size:16px;font-weight:800;cursor:pointer}
-button:disabled{opacity:.4;cursor:default}
-.row{display:flex;gap:8px;align-items:center}
-.small{font-size:13px;color:var(--mut)}
-.status{min-height:20px;font-size:14px}.status.err{color:var(--bad)}.status.ok{color:var(--ok)}
-.team{border-radius:14px;padding:14px;margin-bottom:12px;text-align:center}
-.team.kill{background:#3a1416;border:2px solid var(--bad)}.team.save{background:#12352a;border:2px solid var(--ok)}
-.team b{display:block;font-size:28px;letter-spacing:.08em}
-.team.kill b{color:var(--bad)}.team.save b{color:var(--ok)}
-.team span{font-size:14px;color:var(--ink)}
-.scene{background:#1d2130;border-left:4px solid var(--acc);border-radius:10px;padding:12px 14px;margin-bottom:12px;font-size:17px;line-height:1.4}
-.scene .n{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin-bottom:4px}
-.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-.chip{background:#222736;border-radius:999px;padding:5px 11px;font-size:14px}
-.chip.mine{background:var(--acc);color:#1a1400;font-weight:700}
-h3{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin:10px 0 0}
-.page img{width:100%;display:block;border-radius:8px;background:#fff}
-.strip{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px;background:#fff;border-radius:8px;line-height:1.3}
-@media (max-width:480px){.strip{grid-template-columns:1fr}}
-.panel{position:relative;background:#fff;border:2px solid #111;border-radius:4px;overflow:hidden;color:#111}
-.panel img{width:100%;display:block;background:#fff}
-.panel .cap{font-size:13px;border-top:2px solid #111;padding:6px 8px;font-weight:500;line-height:1.35}
-.panel .bub{font-size:12px;padding:2px 6px;font-style:italic}
-.panel .num{position:absolute;top:4px;left:4px;background:var(--acc);color:#1a1400;font-weight:800;border-radius:4px;padding:0 6px;font-size:12px;line-height:1.5}
-.fate{display:inline-block;color:#fff;font-weight:800;border-radius:4px;padding:1px 8px;font-size:13px;letter-spacing:.04em;margin-left:6px}
-.fate.lives{background:#1f9d5b}.fate.dies{background:#c0392b}
-.busy{padding:14px;line-height:1.5;font-size:15px}.busy .n{color:var(--mut);font-size:13px;margin-top:4px}
-.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--mut);border-top-color:var(--ink);border-radius:50%;animation:s .8s linear infinite;vertical-align:-2px;margin-right:8px}
-@keyframes s{to{transform:rotate(360deg)}}
-.story{font-size:14px;color:var(--ink);margin-top:8px;line-height:1.5}
-.beats{margin:10px 0 0;padding:0;list-style:none;counter-reset:b}
-.beats li{counter-increment:b;position:relative;padding:7px 0 7px 28px;border-top:1px solid #222736;font-size:14px;line-height:1.45}
-.beats li:before{content:counter(b);position:absolute;left:0;top:7px;width:20px;height:20px;border-radius:5px;background:var(--acc);color:#1a1400;font-weight:800;font-size:12px;text-align:center;line-height:20px}
-.title{font-size:18px;font-weight:800;margin-top:10px}
-.q{font-size:20px;font-weight:800;margin-bottom:10px;line-height:1.25}
-.q.kill{color:var(--bad)}.q.save{color:var(--ok)}
-</style>
-<div class=wrap>
-<h1>Kill or Save</h1>
-<p class=sub>One hero: <b id=heroname>Yoland</b>. Two secret teams, one question each. Everyone sees every answer; nobody knows who wrote it, or which question it answered.</p>
+html,body{margin:0;min-height:100%}
+body{background:var(--slate-d);color:var(--cream);
+  font:16px/1.5 "Comic Neue",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;-webkit-text-size-adjust:100%}
+.bg{position:fixed;inset:0;z-index:-1;
+  background:radial-gradient(circle at 50% 42%, #47525f 0%, #333c47 46%, #232a33 100%)}
+.bg:before{content:"";position:absolute;inset:-20%;background:
+  repeating-conic-gradient(from 0deg at 50% 42%,
+    rgba(20,25,32,.42) 0deg .9deg, rgba(255,255,255,0) .9deg 2.6deg,
+    rgba(20,25,32,.22) 2.6deg 3.4deg, rgba(255,255,255,0) 3.4deg 5.4deg)}
+.bg:after{content:"";position:absolute;inset:0;
+  background:radial-gradient(circle, rgba(15,19,25,.5) 1.3px, rgba(0,0,0,0) 1.6px) 0 0/9px 9px;
+  -webkit-mask-image:radial-gradient(ellipse at 50% 42%, rgba(0,0,0,0) 30%, #000 85%);
+  mask-image:radial-gradient(ellipse at 50% 42%, rgba(0,0,0,0) 30%, #000 85%)}
 
-<div class=card id=joincard>
-  <div class=row><input type=text id=name placeholder="your name" maxlength=14></div>
-  <div class=row style="margin-top:10px"><button id=join style="flex:1">Join and get a side</button></div>
+.wrap{max-width:560px;margin:0 auto;padding:14px 16px 72px}
+.display{font-family:Bangers,Impact,sans-serif;font-weight:400;letter-spacing:.045em;
+  transform:skewX(-7deg);text-transform:uppercase;line-height:1}
+.topbar{display:flex;align-items:center;gap:10px;min-height:26px;margin-bottom:12px}
+.topbar .who{font-family:Bangers,Impact,sans-serif;transform:skewX(-7deg);letter-spacing:.06em;
+  font-size:19px;color:#fff;text-shadow:2px 2px 0 rgba(0,0,0,.55)}
+.topbar .dot{margin-left:auto;width:11px;height:11px;border-radius:50%;background:var(--green-hi);
+  box-shadow:0 0 10px rgba(166,232,78,.8)}
+
+h1{font-size:44px;margin:26px 0 6px;color:#fff;text-align:center;
+  text-shadow:3px 3px 0 rgba(0,0,0,.6), -1px -1px 0 rgba(0,0,0,.35)}
+.room{text-align:center;color:var(--mut);font-size:15px;margin-bottom:26px}
+
+.panel{background:var(--cream);color:var(--ink);border:4px solid var(--ink);border-radius:3px;
+  box-shadow:0 5px 0 rgba(0,0,0,.35);padding:14px 16px;position:relative}
+.panel:before{content:"";position:absolute;inset:4px;border:1.5px solid rgba(25,28,33,.45);
+  pointer-events:none;border-radius:2px}
+.panel .n{font-family:Bangers,Impact,sans-serif;transform:skewX(-7deg);letter-spacing:.09em;
+  font-size:13px;color:#6c6350;margin-bottom:4px}
+.caption{font-size:16px;line-height:1.45;font-weight:700}
+
+input[type=text]{width:100%;padding:16px 14px;border:4px solid var(--ink);border-radius:3px;
+  background:var(--cream);color:var(--ink);font:700 19px/1.2 "Comic Neue",sans-serif;text-align:center;
+  box-shadow:0 5px 0 rgba(0,0,0,.35);outline:none}
+input[type=text]::placeholder{color:#8a7f66}
+input[type=text]:focus{border-color:#000;box-shadow:0 5px 0 rgba(0,0,0,.5),0 0 0 3px rgba(233,187,63,.45)}
+
+button{width:100%;position:relative;border:0;cursor:pointer;padding:0;background:none}
+.btn{display:block;width:100%;border:3px solid #7f8894;border-radius:4px;padding:3px;background:#5c6672;
+  box-shadow:0 5px 0 rgba(0,0,0,.35)}
+.btn i{display:block;padding:15px 10px;border-radius:2px;color:#3b2f10;font-style:normal;
+  font-family:Bangers,Impact,sans-serif;transform:skewX(-7deg);letter-spacing:.07em;font-size:21px;
+  background:
+    radial-gradient(circle, rgba(0,0,0,.22) 1.1px, rgba(0,0,0,0) 1.4px) 0 0/7px 7px,
+    repeating-conic-gradient(from 0deg at 50% 50%, rgba(120,88,15,.30) 0deg .8deg, rgba(255,255,255,0) .8deg 3deg),
+    radial-gradient(circle at 50% 50%, #f6d46a 0%, #e9bb3f 42%, #c8922c 100%)}
+button:active .btn{transform:translateY(3px);box-shadow:0 2px 0 rgba(0,0,0,.35)}
+button:disabled{opacity:.45;cursor:default}
+button:disabled .btn{transform:none}
+
+.burstwrap{text-align:center;margin:22px 0 6px}
+.burst{width:170px;height:170px;margin:0 auto;display:flex;align-items:center;justify-content:center;
+  background:
+    radial-gradient(circle, rgba(120,88,15,.32) 1.2px, rgba(0,0,0,0) 1.5px) 0 0/7px 7px,
+    radial-gradient(circle at 50% 50%, #ffe9a6 0%, #f3cc55 38%, #dda32c 72%, #b8801f 100%)}
+.burst span{font-family:Bangers,Impact,sans-serif;transform:skewX(-7deg);font-size:54px;color:#fff;
+  text-shadow:3px 3px 0 #1a1207, -2px -2px 0 rgba(0,0,0,.5)}
+.bcap{color:var(--mut);font-size:14px;margin-top:8px}
+
+.qlabel{font-family:Bangers,Impact,sans-serif;transform:skewX(-7deg);letter-spacing:.06em;font-size:21px;
+  color:var(--gold);text-shadow:2px 2px 0 rgba(0,0,0,.5);margin:18px 0 9px}
+.qlabel.kill{color:#ff8a76}.qlabel.save{color:var(--green-hi)}
+.stack{display:grid;gap:11px}
+.status{min-height:20px;font-size:14px;color:var(--mut);margin-top:9px}
+.status.err{color:#ff8a76}.status.ok{color:var(--green-hi)}
+.hint{color:var(--mut);font-size:13px;margin-top:10px}
+
+h3{font-family:Bangers,Impact,sans-serif;transform:skewX(-7deg);letter-spacing:.08em;font-size:15px;
+  color:var(--mut);margin:22px 0 8px}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{background:rgba(20,25,32,.55);border:2px solid rgba(246,239,220,.28);border-radius:999px;
+  padding:6px 13px;font-size:15px;font-weight:700}
+.chip.mine{background:var(--gold);border-color:var(--ink);color:#3b2f10}
+
+.cardwrap{padding:6px 0 0}
+/* Alex Tov's card art (#temp-hck-team-6, 2026-09-18) is the card; the words sit on top of it. */
+.card{position:relative;aspect-ratio:896/1200;border-radius:6px;overflow:hidden;
+  background:#2b1a16 center/cover no-repeat;box-shadow:0 8px 0 rgba(0,0,0,.4)}
+.card.kill{background-image:url(assets/card-kill.jpg)}
+.card.save{background-image:url(assets/card-save.jpg)}
+.card .title{position:absolute;left:0;right:0;top:6.5%;font-family:Bangers,Impact,sans-serif;
+  transform:skewX(-7deg);font-size:min(9.5vw,42px);color:#fff;letter-spacing:.03em;text-align:center;
+  text-shadow:3px 3px 0 #17190f,-2px -2px 0 rgba(0,0,0,.5)}
+.card .sub{position:absolute;left:24%;right:24%;top:28%;height:14%;display:flex;align-items:center;
+  justify-content:center;text-align:center;font-weight:700;font-size:min(4.4vw,19px);color:#221a12;line-height:1.2}
+.card .foot{position:absolute;left:0;right:0;bottom:5%;text-align:center;font-size:min(3.4vw,14px);
+  font-weight:700;color:#fff;text-shadow:1px 1px 0 rgba(0,0,0,.85)}
+.reveal{margin-top:14px}
+.peek{display:block;width:100%;margin-top:12px;background:none;border:0;color:var(--mut);
+  font:inherit;font-size:14px;text-decoration:underline;cursor:pointer;padding:6px}
+
+.page img{width:100%;display:block;border:4px solid var(--ink);border-radius:3px;background:#fff;
+  box-shadow:0 6px 0 rgba(0,0,0,.4)}
+.strip{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px;background:#fff;
+  border:4px solid var(--ink);border-radius:3px}
+.spanel{position:relative;background:#fff;border:2px solid var(--ink);border-radius:2px;overflow:hidden;color:#111}
+.spanel img{width:100%;display:block}
+.spanel .cap{font-size:12px;border-top:2px solid var(--ink);padding:4px 6px;font-weight:700}
+.title2{font-size:26px;color:#fff;text-shadow:3px 3px 0 rgba(0,0,0,.55);margin:18px 0 10px}
+.beats{margin:12px 0 0;padding:0;list-style:none;counter-reset:b;display:grid;gap:8px}
+.beats li{counter-increment:b;position:relative;padding:11px 12px 11px 44px;background:var(--cream);
+  color:var(--ink);border:3px solid var(--ink);border-radius:3px;font-size:14px;line-height:1.4;font-weight:700}
+.beats li:before{content:counter(b);position:absolute;left:9px;top:9px;width:25px;height:25px;
+  background:var(--gold);border:2px solid var(--ink);border-radius:3px;
+  font-family:Bangers,Impact,sans-serif;font-size:15px;color:#3b2f10;text-align:center;line-height:22px}
+.busy{display:flex;align-items:center;gap:11px;margin-top:16px;background:rgba(20,25,32,.5);
+  border:3px solid rgba(246,239,220,.25);border-radius:4px;padding:13px}
+.busy b{color:var(--gold)}
+.spin{width:17px;height:17px;border:3px solid rgba(246,239,220,.3);border-top-color:var(--gold);
+  border-radius:50%;animation:s .8s linear infinite;flex:0 0 auto}
+@keyframes s{to{transform:rotate(360deg)}}
+</style>
+<div class=bg></div>
+<div class=wrap>
+
+<div class=topbar><span class=who id=who></span><span class=dot id=dot style="display:none"></span></div>
+
+<div id=joincard>
+  <h1 class=display>Kill or Save</h1>
+  <div class=room id=room>Room</div>
+  <div class=stack>
+    <input type=text id=name placeholder="Your name" maxlength=14 autocomplete=off>
+    <button id=join><span class=btn><i>Join room</i></span></button>
+  </div>
   <div class=status id=joinst></div>
 </div>
 
-<div id=game style="display:none">
-  <div class=team id=team></div>
-  <div class=scene id=scene style="display:none"><div class=n>the story so far</div><span id=scenetext></span></div>
-  <div class=card id=answer>
-    <div class=q id=question>&nbsp;</div>
-    <div class=row><input type=text id=idea placeholder="a falling piano" maxlength=64 autocomplete=off autocapitalize=off></div>
-    <div class=row style="margin-top:8px"><button id=add style="flex:1">Lock it in</button></div>
-    <div class=status id=addst></div>
-    <div class=small>Round <b id=round>1</b> of <b id=total>2</b>. <b id=count>0</b> of the room have answered. Yours is yellow; change it any time before Go.</div>
-    <h3>Everyone's answers</h3><div class=chips id=ideas></div>
+<div id=teamcard class=cardwrap style="display:none">
+  <div class=card id=card>
+    <div class=title id=cardtitle></div>
+    <div class=sub id=cardsub></div>
+    <div class=foot>Your team is secret. Don't show anyone.</div>
   </div>
+  <div class=reveal><button id=gotit><span class=btn><i>Got it</i></span></button></div>
+</div>
+
+<div id=game style="display:none">
+  <div class=panel id=scene style="display:none"><div class=n>The story so far</div><div class=caption id=scenetext></div></div>
+
+  <div class=burstwrap><div class=burst id=burst><span id=burstnum>0</span></div><div class=bcap id=bcap></div></div>
+
+  <div id=answer>
+    <div class=qlabel id=question>&nbsp;</div>
+    <div class=stack>
+      <input type=text id=idea placeholder="e.g. a falling piano" maxlength=64 autocomplete=off autocapitalize=off>
+      <button id=add><span class=btn><i>Lock it in</i></span></button>
+    </div>
+    <div class=status id=addst></div>
+    <div class=hint id=hint></div>
+  </div>
+
+  <h3>Everyone's answers</h3>
+  <div class=chips id=ideas></div>
+  <button class=peek id=peek>show my team again</button>
   <div id=next></div>
-  <div class=card><div class=small id=shead>The comic</div><div id=strip><p class=small>No page yet. The big screen presses Go.</p></div></div>
+  <div id=strip></div>
 </div>
 </div>
 <script>
 const $=s=>document.querySelector(s);
+// A 24-point comic burst, built once and shared by the number badge and the team card star.
+(function(){
+  const pts=[]; for(let i=0;i<24;i++){const a=(i*15-90)*Math.PI/180, r=i%2?31:50;
+    pts.push((50+r*Math.cos(a)).toFixed(1)+'% '+(50+r*Math.sin(a)).toFixed(1)+'%');}
+  const st=document.createElement('style');
+  st.textContent='.burst,.card .star{clip-path:polygon('+pts.join(',')+')}';
+  document.head.appendChild(st);
+})();
 const SESS=(new URLSearchParams(location.search).get('sess')||'main').toLowerCase().replace(/[^a-z0-9-]/g,'').slice(0,24)||'main';
+$('#room').textContent='Room '+SESS.toUpperCase();
 let VOTER=localStorage.getItem('room_voter');
 if(!VOTER){VOTER=Math.random().toString(36).slice(2,12).replace(/[^a-z0-9]/g,'x');localStorage.setItem('room_voter',VOTER);}
 let NAME=localStorage.getItem('room_name')||'';
 $('#name').value=NAME;
-let st=null, joined=false, shown='', filledRound=0;
+let st=null, joined=false, shown='', filledRound=0, cardSeen=false, heroName='Yoland';
 
 async function api(body){
   const r=await fetch('/api/kill',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -91,14 +204,29 @@ async function pull(){
 }
 function esc(s){return (s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));}
 
-function enter(){ joined=true; $('#joincard').style.display='none'; $('#game').style.display=''; tick(); }
+function showCard(team){
+  $('#card').className='card '+team;
+  $('#cardtitle').textContent=(team==='kill'?'Kill ':'Save ')+heroName;
+  $('#cardsub').textContent=team==='kill'?'Make it spectacular.':'Make it heroic.';
+  $('#joincard').style.display='none'; $('#game').style.display='none';
+  $('#teamcard').style.display='';
+}
+$('#gotit').onclick=()=>{ cardSeen=true; $('#teamcard').style.display='none'; $('#game').style.display=''; $('#idea').focus(); };
+$('#peek').onclick=()=>{ if(st&&st.me) showCard(st.me.team); };
+
+function enter(team){
+  joined=true; $('#dot').style.display='';
+  $('#who').textContent=NAME.toUpperCase();
+  if(!cardSeen){ showCard(team); } else { $('#joincard').style.display='none'; $('#game').style.display=''; }
+  tick();
+}
 $('#join').onclick=async()=>{
   NAME=$('#name').value.trim();
-  if(!NAME){$('#joinst').className='status err';$('#joinst').textContent='name?';return;}
+  if(!NAME){$('#joinst').className='status err';$('#joinst').textContent='Name first.';return;}
   localStorage.setItem('room_name',NAME);
   const g=await api({action:'join'});
   if(g.error){$('#joinst').className='status err';$('#joinst').textContent=g.error;return;}
-  enter(); $('#idea').focus();
+  enter(g.team);
 };
 $('#name').addEventListener('keydown',e=>{if(e.key==='Enter')$('#join').click();});
 $('#idea').addEventListener('keydown',e=>{if(e.key==='Enter')$('#add').click();});
@@ -108,55 +236,53 @@ $('#add').onclick=async()=>{
   try{
     const g=await api({action:'say',idea:t});
     if(g.error){$('#addst').className='status err';$('#addst').textContent=g.error;}
-    else{$('#addst').className='status ok';$('#addst').textContent='locked in: '+g.idea+' (change it any time before Go)';}
+    else{$('#addst').className='status ok';$('#addst').textContent='Locked in: '+g.idea;}
     await tick();
   }catch(e){}
   $('#add').disabled=false;
 };
 
-function pageHtml(cur,H){
+function pageHtml(cur){
   let body='';
   if(cur.image){ body=`<div class=page><img src="${cur.image}" alt="comic page ${cur.round}"></div>`; }
   else if(cur.images){
     body='<div class=strip>'+cur.images.map((u,i)=>{const p=cur.panels[i]||{};
-      return `<div class=panel><span class=num>${i+1}</span><img src="${u}" alt="panel ${i+1}">`+
+      return `<div class=spanel><img src="${u}" alt="panel ${i+1}">`+
         `<div class=cap>${esc(p.text||p.caption||'')}</div></div>`;}).join('')+'</div>';
   }
   const beats=(cur.panels||[]).map(p=>p.text||p.caption||'').filter(Boolean);
-  const told = beats.length ? `<ol class=beats>${beats.map(t=>`<li>${esc(t)}</li>`).join('')}</ol>`
-    : `<div class=story>${esc(cur.story||'')}</div>`;
-  return `<div class=title>Round ${cur.round}: ${esc(cur.title||'')}</div>`+body+told;
+  const told = beats.length ? `<ol class=beats>${beats.map(t=>`<li>${esc(t)}</li>`).join('')}</ol>` : '';
+  const clips=(cur.audio||[]);
+  const hear = clips.length ? `<button class=peek id=hear>&#9654; hear ${esc(heroName)} tell it</button>` : '';
+  return `<div class="title2 display">Round ${cur.round}: ${esc(cur.title||'')}</div>`+body+told+hear;
 }
 
 function render(){
-  const me=st.me, H=esc(st.hero_name);
-  if(me){
-    $('#team').className='team '+me.team;
-    $('#team').innerHTML = me.team==='kill'
-      ? '<span>your secret side</span><b>KILL</b><span>Your answer becomes what comes for him.</span>'
-      : '<span>your secret side</span><b>SAVE</b><span>Your answer becomes what saves him.</span>';
-    $('#question').className='q '+me.team;
-    $('#question').textContent=st.question||'';
-  }
-  $('#heroname').textContent=st.hero_name;
-  $('#round').textContent=st.round; $('#total').textContent=st.total_rounds; $('#count').textContent=st.answers;
+  const me=st.me;
+  heroName=st.hero_name||heroName;
   const over = st.finished || st.round>st.total_rounds;
-  const so = over ? 'The End. The host can reset for a new game.' : (st.so_far || '');
+  if(me){ $('#question').className='qlabel '+me.team; $('#question').textContent=st.question||''; }
+  $('#burstnum').textContent = over ? '!' : st.answers;
+  $('#bcap').textContent = over ? 'the end' : 'answers in for round '+st.round+' of '+st.total_rounds;
+  const so = over ? 'The End. The host can start a new game.' : (st.so_far || '');
   $('#scene').style.display = so ? '' : 'none';
   $('#scenetext').textContent = so;
   $('#answer').style.display = over ? 'none' : '';
+  $('#hint').textContent = over ? '' : 'Change it any time before the host hits Go.';
   if(filledRound!==st.round){ filledRound=st.round; $('#idea').value=(st.mine&&st.mine.idea)||''; if(!st.mine) $('#addst').textContent=''; }
   const mine=st.mine?st.mine.idea:'';
-  $('#ideas').innerHTML=st.ideas.map(w=>`<span class="chip${w===mine?' mine':''}">${esc(w)}</span>`).join('')||'<span class=small>nothing yet</span>';
+  $('#ideas').innerHTML=st.ideas.map(w=>`<span class="chip${w===mine?' mine':''}">${esc(w)}</span>`).join('')||'<span class=hint>Nothing yet.</span>';
   const d=st.drawing;
-  $('#next').innerHTML = d ? `<div class="card busy"><span class=spin></span><b>drawing page ${d.round}: ${esc(d.title||'')}</b> - ${Math.max(0,Math.round((st.now-d.ms)/1000))}s`
-    +`<div class=n>the page is being drawn with ${H} in it. You can already answer the next scene above.</div></div>` : '';
+  $('#next').innerHTML = d ? `<div class=busy><span class=spin></span><div><b>Drawing round ${d.round}</b> &middot; ${Math.max(0,Math.round((st.now-d.ms)/1000))}s`
+    +`<div class=hint style="margin-top:2px">${esc(d.title||'')} &mdash; you can already answer for the next round.</div></div></div>` : '';
   const cur=st.current;
   const key=cur ? cur.round+':'+(cur.image||(cur.images||[]).join('|')) : '';
   if(key!==shown){
-    shown=key;
-    $('#shead').textContent = cur ? 'made from: '+cur.words.join(', ') : 'The comic';
-    $('#strip').innerHTML = cur ? pageHtml(cur,H) : '<p class=small>No page yet. The big screen presses Go.</p>';
+    shown=key; $('#strip').innerHTML = cur ? pageHtml(cur) : '';
+    const h=document.getElementById('hear');
+    if(h) h.onclick=()=>{ const list=cur.audio||[]; let i=0;
+      const a=new Audio(); a.onended=a.onerror=()=>{ if(++i<list.length){ a.src=list[i]; a.play().catch(()=>{}); } };
+      a.src=list[0]; a.play().catch(()=>{}); };
   }
 }
 async function tick(){
@@ -169,5 +295,5 @@ async function tick(){
   }catch(e){}
 }
 setInterval(tick,2500);
-if(NAME){ api({action:'join'}).then(g=>{ if(!g.error) enter(); }).catch(()=>{}); }
+if(NAME){ api({action:'join'}).then(g=>{ if(!g.error){ cardSeen=!!g.returning; enter(g.team); } }).catch(()=>{}); }
 </script>

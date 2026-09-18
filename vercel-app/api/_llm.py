@@ -14,7 +14,7 @@ ROUTER = "https://api.comfy.org/proxy/anthropic/v1/messages"
 MODEL_FAST = "claude-haiku-4-5-20251001"
 MODEL_FUNNY = "claude-sonnet-5"
 HERE = os.path.dirname(os.path.abspath(__file__))
-PAGE_ASPECT = "square, 1:1"
+PAGE_ASPECT = "wide landscape, 16:9"
 STYLE = ("Bright, clean, modern cartoon comic-book art: bold black ink outlines, flat saturated colours, "
          "simple shading, expressive faces, clear readable compositions.")
 
@@ -129,11 +129,11 @@ def smash(hero_name, round_number, total_rounds, verdict, hero_description, curr
         lines += ["", "THIS GAME'S RENDER (overrides PANEL STRUCTURE counts, LETTERING and THE PAGE PROMPT):",
                   f"- Plan EXACTLY {panels_exactly} panels this round, whatever the round number: fold the beats "
                   f"into {panels_exactly} moments, the last one the OUTCOME.",
-                  "- LAYOUT, manga style: the four panels are NOT a plain grid. Vary their size and shape across "
-                  "the page: a tall narrow panel down one side, a wide letterbox strip, a couple of slanted edges "
-                  "so at least one gutter cuts the page on a diagonal, and the OUTCOME panel clearly the biggest, "
-                  "often bleeding to the page edge. They still read left to right, top to bottom, they never "
-                  "overlap, and there are still exactly four of them. Write \"layout\" as that arrangement in plain "
+                  "- LAYOUT, manga style on a WIDE LANDSCAPE page: the four panels are NOT a plain grid. Vary "
+                  "their size and shape across the page: a tall narrow panel down one side, a wide letterbox "
+                  "strip, a couple of slanted edges so at least one gutter cuts the page on a diagonal, and the "
+                  "OUTCOME panel clearly the biggest, often bleeding to the page edge. They still read left to "
+                  "right, they never overlap, and there are still exactly four of them. Write \"layout\" as that "
                   "words, and every panel's \"page_position\" as its place, size and shape together, e.g. \"tall "
                   "narrow panel down the left third, slanted right edge\" or \"wide panel across the bottom half, "
                   "bleeding off both edges\".",
@@ -146,9 +146,14 @@ def smash(hero_name, round_number, total_rounds, verdict, hero_description, curr
                   "bubbles, sound effects, signs, labels or any other text: give each panel its visual only, and "
                   "close the page prompt with \"No text, letters, numbers, speech bubbles, caption boxes or sound "
                   "effects anywhere on the page.\" before the art style.",
-                  "- Add to every panel object a field \"text\": one or two sentences, max 35 words, narrating that "
-                  "panel to the audience like a storybook (what happens, and what anyone says, in prose). The four "
-                  "\"text\" fields read in order must tell the whole story on their own."]
+                  f"- Add to every panel object a field \"text\": {hero_name.upper()} NARRATING THAT PANEL HIMSELF, "
+                  f"out loud, in FIRST PERSON and present tense: \"I stroll into the market, and that is when the "
+                  f"anvil finds me.\" One or two sentences, max 30 words, said the way a person talks, because it "
+                  f"is read aloud in his voice. Never write \"{hero_name}\" in the third person there, never say "
+                  f"\"Panel 1\", and use plain words a voice can say: no emoji, no asterisks, no stage directions "
+                  f"in brackets. He can react, complain and joke about what is happening to him. The four \"text\" "
+                  f"fields read in order must tell the whole story on their own.",
+                  "- \"story\" and \"outcome\" stay in the third person, for the record; only \"text\" is his voice."]
     if previous_rounds:
         lines += ["", "THIS IS A CONTINUATION, NOT A NEW STORY:",
                   "- This page picks up moments after the last panel of the previous page, in the same world and "

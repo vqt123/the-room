@@ -33,7 +33,7 @@ plus `ks:<sess>:hero` (photo URL), `:rounds`, `:render` (page | pro | panels), `
 import json, os, random, re, secrets, sys, time
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import _blob, _kv, _llm
+import _blob, _kv, _llm, _voice
 from _core import check_password  # noqa: F401
 from _findcore import _output, client, poll, story_panels
 from _findgraph import COMIC_STYLE, HERO_DRAW, HERO_LOOK, HERO_NAME, build_page, build_panels
@@ -45,7 +45,7 @@ PAGE_MS = 25_000             # a Nano Banana page, for the countdown on screen
 PANELS_MS = 55_000
 # The image model will happily draw a fifth frame if the page leaves room, so the count is
 # restated by us at the end of the prompt rather than trusted to the writer (seen 2026-09-18).
-PAGE_TAIL = (" Dynamic manga-style page layout: exactly four panels of deliberately different sizes and shapes, "
+PAGE_TAIL = (" Dynamic manga-style comic page in wide landscape: exactly four panels of different sizes and shapes, "
              "some edges slanted so a gutter cuts across the page on a diagonal, thick black panel borders, white "
              "gutters, the last panel the largest. The panels must not overlap each other. Do not draw a fifth "
              "panel, an inset panel, a repeated panel, or a title banner.")
@@ -106,6 +106,22 @@ def _fetch(url, timeout=30):
 def _hero_bytes(sess):
     url = get_hero(sess)
     return _fetch(url) if url else None
+
+
+def get_voice(sess):
+    """The voice that reads Yoland's lines: a clone of him once someone gives us audio, a
+    stock male voice until then."""
+    return _kv.cmd("GET", f"ks:{sess}:voice") or _voice.STOCK_VOICE
+
+
+def set_voice(sess, voice_id=None, samples=None, name="Yoland"):
+    """Point the session at an ElevenLabs voice, or clone one from reference audio."""
+    if samples:
+        voice_id = _voice.clone(name, samples)
+    if not voice_id:
+        raise ValueError("give a voice id or some audio")
+    _kv.cmd("SET", f"ks:{sess}:voice", voice_id, "EX", TTL_S * 7)
+    return {"voice": voice_id, "cloned": bool(samples)}
 
 
 def total_rounds(sess):
@@ -209,6 +225,11 @@ def say(sess, voter, idea=None):
 
 # ---- the shared view --------------------------------------------------------------------------
 
+def _voice_path(sess, rec, n):
+    tag = f"-{rec['tag']}" if rec.get("tag") else ""
+    return f"ks/{sess}/r{rec['r']}{tag}-v{n}.mp3"
+
+
 def _path(sess, rec, panel=None):
     tag = f"-{rec['tag']}" if rec.get("tag") else ""
     if panel:
@@ -251,6 +272,8 @@ def state(sess, voter=None):
         elif rec.get("done_ms"):
             row["state"] = "done"
             row["done_ms"] = rec["done_ms"]
+            # One clip per panel, in Yoland's own voice, or [] when the speech step failed.
+            row["audio"] = [f"{base}/{_voice_path(sess, rec, i)}" for i in range(1, rec.get("audio", 0) + 1)]
             # Every game's files carry their own tag: after a reset, round 1 must not reuse the
             # old round 1's file name, or browsers (and the pages' "is it new" check) keep the
             # old picture. Records from before the tag get a version query instead.
@@ -276,7 +299,7 @@ def state(sess, voter=None):
             "so_far": (last or {}).get("story") or "",
             "round": r, "total_rounds": total, "final": r >= total, "finished": finished,
             "next_verdict": verdict_for(sess, r), "verdict_override": verdict_override(sess) or "auto",
-            "render": render_mode(sess),
+            "render": render_mode(sess), "voice": get_voice(sess),
             "ideas": ideas, "answers": len(this),
             "question": (f"What kills {HERO_NAME}?" if me["t"] == "kill"
                          else f"What saves {HERO_NAME}?") if me else None,
@@ -394,9 +417,24 @@ def publish(sess, round_no):
     else:
         out = _output(client().jobs.get(rec["job"]), "31")
         _blob.put(_path(sess, rec), _fetch(str(out.get_download_url().url), 60), "image/png")
+    # Yoland reads his own lines. The four calls run together, so this costs a couple of
+    # seconds; a failure here must never cost the round, so the page still publishes.
+    try:
+        lines = [str(p.get("text") or p.get("caption") or "") for p in (rec.get("panels") or [])]
+        clips = _voice.say_all(lines, get_voice(sess)) if any(lines) else []
+        n = 0
+        for i, mp3 in enumerate(clips, 1):
+            if not mp3:
+                break
+            _blob.put(_voice_path(sess, rec, i), mp3, "audio/mpeg")
+            n = i
+        rec["audio"] = n
+    except Exception as e:  # noqa: BLE001
+        rec["audio"] = 0
+        rec["voice_error"] = str(e)[:160]
     rec["done_ms"] = int(time.time() * 1000)
     _kv.pipe([["HSET", _k(sess), f"n:{rec['r']}", json.dumps(rec)], ["EXPIRE", _k(sess), TTL_S]])
-    return {"state": "done", "round": rec["r"]}
+    return {"state": "done", "round": rec["r"], "clips": rec.get("audio", 0)}
 
 
 def advance(sess):
@@ -414,7 +452,7 @@ def advance(sess):
 
 def reset(sess):
     """Wipe the game: players, answers, setup, pages. The hero photo and the settings stay."""
-    keep = (":hero", ":rounds", ":render")
+    keep = (":hero", ":rounds", ":render", ":voice")
     keys = [_k(sess)] + [k for k in _kv.scan(f"ks:{sess}:*") if not k.endswith(keep)]
     if keys:
         _kv.cmd("DEL", *keys)
