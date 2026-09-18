@@ -43,10 +43,12 @@ h3{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)
 .beats li{counter-increment:b;position:relative;padding:7px 0 7px 28px;border-top:1px solid #222736;font-size:14px;line-height:1.45}
 .beats li:before{content:counter(b);position:absolute;left:0;top:7px;width:20px;height:20px;border-radius:5px;background:var(--acc);color:#1a1400;font-weight:800;font-size:12px;text-align:center;line-height:20px}
 .title{font-size:18px;font-weight:800;margin-top:10px}
+.q{font-size:20px;font-weight:800;margin-bottom:10px;line-height:1.25}
+.q.kill{color:var(--bad)}.q.save{color:var(--ok)}
 </style>
 <div class=wrap>
 <h1>Kill or Save</h1>
-<p class=sub>One hero: <b id=heroname>Yoland</b>. Two secret teams. Give one noun and one verb. Everyone sees every word; nobody knows whose, or which side it serves.</p>
+<p class=sub>One hero: <b id=heroname>Yoland</b>. Two secret teams, one question each. Everyone sees every answer; nobody knows who wrote it, or which question it answered.</p>
 
 <div class=card id=joincard>
   <div class=row><input type=text id=name placeholder="your name" maxlength=14></div>
@@ -58,12 +60,12 @@ h3{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)
   <div class=team id=team></div>
   <div class=scene id=scene style="display:none"><div class=n>the story so far</div><span id=scenetext></span></div>
   <div class=card id=answer>
-    <div class=row><input type=text id=noun placeholder="a noun: anvil" maxlength=24 autocomplete=off autocapitalize=off><input type=text id=verb placeholder="a verb: juggle" maxlength=24 autocomplete=off autocapitalize=off></div>
-    <div class=row style="margin-top:8px"><button id=add style="flex:1">Lock in</button></div>
+    <div class=q id=question>&nbsp;</div>
+    <div class=row><input type=text id=idea placeholder="a falling piano" maxlength=64 autocomplete=off autocapitalize=off></div>
+    <div class=row style="margin-top:8px"><button id=add style="flex:1">Lock it in</button></div>
     <div class=status id=addst></div>
-    <div class=small>Round <b id=round>1</b> of <b id=total>2</b>. <b id=count>0</b> players have answered. Yours are yellow; you can change them until Go.</div>
-    <h3>Nouns</h3><div class=chips id=nouns></div>
-    <h3>Verbs</h3><div class=chips id=verbs></div>
+    <div class=small>Round <b id=round>1</b> of <b id=total>2</b>. <b id=count>0</b> of the room have answered. Yours is yellow; change it any time before Go.</div>
+    <h3>Everyone's answers</h3><div class=chips id=ideas></div>
   </div>
   <div id=next></div>
   <div class=card><div class=small id=shead>The comic</div><div id=strip><p class=small>No page yet. The big screen presses Go.</p></div></div>
@@ -96,17 +98,17 @@ $('#join').onclick=async()=>{
   localStorage.setItem('room_name',NAME);
   const g=await api({action:'join'});
   if(g.error){$('#joinst').className='status err';$('#joinst').textContent=g.error;return;}
-  enter(); $('#noun').focus();
+  enter(); $('#idea').focus();
 };
 $('#name').addEventListener('keydown',e=>{if(e.key==='Enter')$('#join').click();});
-for(const id of ['#noun','#verb']) $(id).addEventListener('keydown',e=>{if(e.key==='Enter')$('#add').click();});
+$('#idea').addEventListener('keydown',e=>{if(e.key==='Enter')$('#add').click();});
 $('#add').onclick=async()=>{
-  const n=$('#noun').value.trim(), v=$('#verb').value.trim(); if(!n&&!v) return;
+  const t=$('#idea').value.trim(); if(!t) return;
   $('#add').disabled=true;
   try{
-    const g=await api({action:'say',noun:n,verb:v});
+    const g=await api({action:'say',idea:t});
     if(g.error){$('#addst').className='status err';$('#addst').textContent=g.error;}
-    else{$('#addst').className='status ok';$('#addst').textContent='locked in: '+[g.noun,g.verb].filter(Boolean).join(' / ')+' (change any time before Go)';}
+    else{$('#addst').className='status ok';$('#addst').textContent='locked in: '+g.idea+' (change it any time before Go)';}
     await tick();
   }catch(e){}
   $('#add').disabled=false;
@@ -131,8 +133,10 @@ function render(){
   if(me){
     $('#team').className='team '+me.team;
     $('#team').innerHTML = me.team==='kill'
-      ? '<span>your secret side</span><b>KILL</b><span>Your noun and verb become the obstacle.</span>'
-      : '<span>your secret side</span><b>SAVE</b><span>Your noun and verb become the rescue.</span>';
+      ? '<span>your secret side</span><b>KILL</b><span>Your answer becomes what comes for him.</span>'
+      : '<span>your secret side</span><b>SAVE</b><span>Your answer becomes what saves him.</span>';
+    $('#question').className='q '+me.team;
+    $('#question').textContent=st.question||'';
   }
   $('#heroname').textContent=st.hero_name;
   $('#round').textContent=st.round; $('#total').textContent=st.total_rounds; $('#count').textContent=st.answers;
@@ -141,11 +145,9 @@ function render(){
   $('#scene').style.display = so ? '' : 'none';
   $('#scenetext').textContent = so;
   $('#answer').style.display = over ? 'none' : '';
-  if(st.mine && filledRound!==st.round){ filledRound=st.round; $('#noun').value=st.mine.noun||''; $('#verb').value=st.mine.verb||''; }
-  if(!st.mine && filledRound!==st.round){ filledRound=st.round; $('#noun').value=''; $('#verb').value=''; $('#addst').textContent=''; }
-  const mn=st.mine?st.mine.noun:'', mv=st.mine?st.mine.verb:'';
-  $('#nouns').innerHTML=st.nouns.map(w=>`<span class="chip${w===mn?' mine':''}">${esc(w)}</span>`).join('')||'<span class=small>none yet</span>';
-  $('#verbs').innerHTML=st.verbs.map(w=>`<span class="chip${w===mv?' mine':''}">${esc(w)}</span>`).join('')||'<span class=small>none yet</span>';
+  if(filledRound!==st.round){ filledRound=st.round; $('#idea').value=(st.mine&&st.mine.idea)||''; if(!st.mine) $('#addst').textContent=''; }
+  const mine=st.mine?st.mine.idea:'';
+  $('#ideas').innerHTML=st.ideas.map(w=>`<span class="chip${w===mine?' mine':''}">${esc(w)}</span>`).join('')||'<span class=small>nothing yet</span>';
   const d=st.drawing;
   $('#next').innerHTML = d ? `<div class="card busy"><span class=spin></span><b>drawing page ${d.round}: ${esc(d.title||'')}</b> - ${Math.max(0,Math.round((st.now-d.ms)/1000))}s`
     +`<div class=n>the page is being drawn with ${H} in it. You can already answer the next scene above.</div></div>` : '';

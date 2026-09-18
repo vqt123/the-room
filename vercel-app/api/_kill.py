@@ -1,9 +1,10 @@
 """Kill or Save, on Team 6's prompts: one hero (Yoland), two secret teams, one comic page per round.
 
 How a game runs (build/team_prompts.txt is the source; this is the engine it describes):
-  1. Players each submit one NOUN and one VERB. Everyone sees every word; nobody sees teams.
-     Sides are secret, assigned on join. There is no scene to read first: the words make the
-     setting (Vinh, 2026-09-18).
+  1. Every player answers one question in one field: team Kill is asked "What kills Yoland?"
+     and team Save "What saves Yoland?" (Vinh, 2026-09-18). Everyone sees every answer; nobody
+     sees who wrote it or which question it answered. Sides are secret, assigned on join.
+     There is no scene to read first: the answers make the setting.
   2. Go (the host): ONE Smash call gets the KILL pool, the SAVE pool, the story so far and a
      fixed verdict, and returns the story, the panel plans, one page_prompt, the continuity
      and the hook into the next round, as JSON. Round 1 also carries the hero's photo and the
@@ -19,7 +20,7 @@ next round's verdict from the screen. total_rounds is per session (default 2).
 
 State is one Redis hash per session, `ks:<sess>`:
   p:<voter>       json {n: name, t: team, ms}
-  a:<r>:<voter>   json {noun, verb, ms}        one answer per player per round, editable until Go
+  a:<r>:<voter>   json {idea, ms}              one answer per player per round, editable until Go
   round           the round the pot is filling right now (1-based)
   setup           json {hero_description, scene}
   scene           the current round's scene text
@@ -182,30 +183,28 @@ def join(sess, voter, name):
     return {"team": team, "name": name, "returning": False}
 
 
-def clean_word(text, limit=24):
-    """Letters, digits, spaces, apostrophes and hyphens; at most three words."""
-    t = " ".join((text or "").strip().lower().split()[:3])
+def clean_idea(text, limit=64):
+    """An answer in the player's own words: letters, digits, spaces, apostrophes and hyphens,
+    at most nine words, so a whole phrase fits without being chopped mid-thought."""
+    t = " ".join((text or "").strip().lower().split()[:9])
     return WORD_RE.sub("", t)[:limit].strip("'- ")
 
 
-def say(sess, voter, noun=None, verb=None):
-    """One noun and one verb per player per round; either can be changed until Go."""
+def say(sess, voter, idea=None):
+    """One answer per player per round, changeable until Go. Team Kill is answering "what kills
+    him?" and team Save "what saves him?"; the answer itself never says which."""
     if not NAME_RE.match(voter or ""):
         raise ValueError("bad voter")
     players, answers, _, meta = _load(sess)
     if voter not in players:
         raise ValueError("join first")
+    said = clean_idea(idea)
+    if not said:
+        raise ValueError("type an answer")
     r = meta["round"]
-    cur = answers.get(r, {}).get(voter, {"noun": "", "verb": ""})
-    if noun is not None:
-        cur["noun"] = clean_word(noun)
-    if verb is not None:
-        cur["verb"] = clean_word(verb)
-    if not cur["noun"] and not cur["verb"]:
-        raise ValueError("type a noun or a verb")
-    cur["ms"] = int(time.time() * 1000)
-    _kv.pipe([["HSET", _k(sess), f"a:{r}:{voter}", json.dumps(cur)], ["EXPIRE", _k(sess), TTL_S]])
-    return {"round": r, "noun": cur["noun"], "verb": cur["verb"]}
+    rec = {"idea": said, "ms": int(time.time() * 1000)}
+    _kv.pipe([["HSET", _k(sess), f"a:{r}:{voter}", json.dumps(rec)], ["EXPIRE", _k(sess), TTL_S]])
+    return {"round": r, "idea": said}
 
 
 # ---- the shared view --------------------------------------------------------------------------
@@ -218,15 +217,12 @@ def _path(sess, rec, panel=None):
 
 
 def _pools(players, answers_r):
-    pools = {t: {"nouns": [], "verbs": []} for t in TEAMS}
+    """The two secret pools: what each side answered, in their own words."""
+    pools = {t: [] for t in TEAMS}
     for voter, a in answers_r.items():
         t = players.get(voter, {}).get("t")
-        if t not in pools:
-            continue
-        if a.get("noun"):
-            pools[t]["nouns"].append(a["noun"])
-        if a.get("verb"):
-            pools[t]["verbs"].append(a["verb"])
+        if t in pools and a.get("idea"):
+            pools[t].append(a["idea"])
     return pools
 
 
@@ -238,18 +234,17 @@ def state(sess, voter=None):
     r = meta["round"]
     mine = answers.get(r, {}).get(voter) if voter else None
     this = answers.get(r, {})
-    # The feed is anonymous: words only, in alphabetical order so nothing leaks from timing.
-    nouns = sorted(a["noun"] for a in this.values() if a.get("noun"))
-    verbs = sorted(a["verb"] for a in this.values() if a.get("verb"))
+    # The feed is anonymous: the answers alone, alphabetically, so neither who wrote one nor
+    # which question it answered can be read off the order they arrived in.
+    ideas = sorted(a["idea"] for a in this.values() if a.get("idea"))
     pages, drawing = [], None
     for n in sorted(rounds):
         rec = rounds[n]
         row = {"round": n, "verdict": rec["verdict"], "title": rec.get("title"), "story": rec.get("story"),
                "outcome": rec.get("outcome"), "layout": rec.get("layout"), "panels": rec.get("panels") or [],
                "render": rec.get("render"), "ms": rec["ms"], "scene": rec.get("scene"),
-               "words": rec.get("kill", {}).get("nouns", []) + rec.get("kill", {}).get("verbs", [])
-                        + rec.get("save", {}).get("nouns", []) + rec.get("save", {}).get("verbs", [])}
-        row["words"] = sorted(row["words"])
+               "words": sorted(w for pool in (rec.get("kill"), rec.get("save"))
+                               for w in (pool if isinstance(pool, list) else []))}
         if rec.get("error"):
             row["state"] = "failed"
             row["error"] = rec["error"]
@@ -282,8 +277,10 @@ def state(sess, voter=None):
             "round": r, "total_rounds": total, "final": r >= total, "finished": finished,
             "next_verdict": verdict_for(sess, r), "verdict_override": verdict_override(sess) or "auto",
             "render": render_mode(sess),
-            "nouns": nouns, "verbs": verbs, "answers": len(this),
-            "mine": {"noun": mine.get("noun", ""), "verb": mine.get("verb", "")} if mine else None,
+            "ideas": ideas, "answers": len(this),
+            "question": (f"What kills {HERO_NAME}?" if me["t"] == "kill"
+                         else f"What saves {HERO_NAME}?") if me else None,
+            "mine": {"idea": mine.get("idea", "")} if mine else None,
             "players": {t: sum(1 for p in players.values() if p["t"] == t) for t in TEAMS},
             "me": {"team": me["t"], "name": me["n"]} if me else None,
             "pages": pages, "current": done[-1] if done else None, "drawing": drawing,
@@ -332,8 +329,7 @@ def start(sess):
         photo = hero if (hero and not look) else None
         kind = "image/png" if (photo and photo[:8] == b"\x89PNG\r\n\x1a\n") else "image/jpeg"
         plan = _llm.smash(HERO_NAME, r, total, verdict.upper(), look, meta["scene"],
-                          previous, meta["cont"], pools["kill"]["nouns"], pools["kill"]["verbs"],
-                          pools["save"]["nouns"], pools["save"]["verbs"], previous_page=use_prev,
+                          previous, meta["cont"], pools["kill"], pools["save"], previous_page=use_prev,
                           panels_exactly=4, photo=photo, photo_type=kind)
         look = look or str(plan.get("hero_description") or "").strip() or HERO_LOOK
         panels = plan.get("panels") or []

@@ -82,7 +82,7 @@ HERO_RULES = ("- The first image attached to this message is a photo of the hero
 
 
 def smash(hero_name, round_number, total_rounds, verdict, hero_description, current_scene, previous_rounds,
-          continuity, kill_nouns, kill_verbs, save_nouns, save_verbs, previous_page=False, panels_exactly=4,
+          continuity, kill_ideas, save_ideas, previous_page=False, panels_exactly=4,
           photo=None, photo_type="image/png"):
     """The one LLM call per round: the story, the panel plans, the page prompt, the continuity and
     the hook into the next round. There is no separate setup step any more (Vinh, 2026-09-18):
@@ -117,9 +117,14 @@ def smash(hero_name, round_number, total_rounds, verdict, hero_description, curr
                   f"- Still around: {continuity.get('world') or '(none)'}"]
     else:
         lines.append("None yet. This is the first round.")
-    lines += ["", "KILL POOL (teams are secret from players, visible to you):",
-              f"- Nouns: {join(kill_nouns)}", f"- Verbs: {join(kill_verbs)}", "",
-              "SAVE POOL:", f"- Nouns: {join(save_nouns)}", f"- Verbs: {join(save_verbs)}"]
+    lines += ["", "HOW THE WORDS WERE COLLECTED (this overrides the NOUN and VERB wording above):",
+              f"- Every player answered one question, in their own words. The KILL team was asked \"What kills "
+              f"{hero_name}?\" and the SAVE team was asked \"What saves {hero_name}?\". Each pool below is the list "
+              f"of those answers. Treat them as things and actions to build the round from, mix and match freely "
+              f"within a pool, and keep every rule about which pool does what.",
+              "", "KILL POOL, their answers to \"what kills him?\" (teams are secret from players, visible to you):",
+              f"- {join(kill_ideas)}", "",
+              f"SAVE POOL, their answers to \"what saves him?\":", f"- {join(save_ideas)}"]
     if panels_exactly:
         lines += ["", "THIS GAME'S RENDER (overrides PANEL STRUCTURE counts, LETTERING and THE PAGE PROMPT):",
                   f"- Plan EXACTLY {panels_exactly} panels this round, whatever the round number: fold the beats "

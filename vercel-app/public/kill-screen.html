@@ -61,8 +61,7 @@ h2{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut)
 </div>
 <div class=right>
   <div class="card grow"><h2 id=fhead>In the pot</h2>
-    <h2 style="margin-top:6px">nouns</h2><div class=chips id=nouns></div>
-    <h2>verbs</h2><div class=chips id=verbs></div>
+    <div class=chips id=ideas></div>
     <div class=busy id=busy></div>
   </div>
   <div class=card id=story style="display:none;flex:0 1 auto;overflow:auto"><div class=title id=title></div><ol class=beats id=beats></ol></div>
@@ -97,9 +96,8 @@ function render(){
   const heroHtml = st.hero ? `<img src="${st.hero}" alt=""><span>starring ${H}</span>` : `<span>starring ${H}</span>`;
   if($('#hero').innerHTML!==heroHtml) $('#hero').innerHTML=heroHtml;
   $('#roundlbl').textContent = over ? 'game over' : 'round '+st.round+' of '+st.total_rounds;
-  $('#fhead').textContent = over ? 'The End' : 'In the pot for round '+st.round+' - '+st.answers+' answered';
-  $('#nouns').innerHTML=st.nouns.map(w=>`<span class=chip>${esc(w)}</span>`).join('')||'<span style="color:var(--mut)">none yet</span>';
-  $('#verbs').innerHTML=st.verbs.map(w=>`<span class=chip>${esc(w)}</span>`).join('')||'<span style="color:var(--mut)">none yet</span>';
+  $('#fhead').textContent = over ? 'The End' : 'Round '+st.round+' - '+st.answers+' answered. One side is saying what kills him, the other what saves him.';
+  $('#ideas').innerHTML=st.ideas.map(w=>`<span class=chip>${esc(w)}</span>`).join('')||'<span style="color:var(--mut)">nothing yet</span>';
   $('#busy').innerHTML = busy ? '<span class=spin></span>the game master is writing the story and planning the panels...'
     : d ? `<span class=spin></span>drawing page ${d.round}: ${esc(d.title||'')} - ${Math.max(0,Math.round((st.now-d.ms)/1000))}s` : '';
   $('#go').disabled = !st.can_start || busy;
@@ -107,7 +105,7 @@ function render(){
   $('#scene').style.display = st.so_far ? '' : 'none';
   $('#scenetext').textContent = st.so_far || '';
   $('#note').textContent = over ? '' : 'no timer - the words make the scene, Go closes the pot';
-  $('#teams').innerHTML = `<span>team Kill <b>${st.players.kill}</b></span><span>team Save <b>${st.players.save}</b></span><span>sides are secret; the game master knows</span>`;
+  $('#teams').innerHTML = `<span>team Kill <b>${st.players.kill}</b></span><span>team Save <b>${st.players.save}</b></span><span>sides are secret; only the storyteller knows which answer is which</span>`;
   if(cur){ $('#story').style.display=''; $('#title').textContent='Round '+cur.round+': '+(cur.title||'');
     const beats=(cur.panels||[]).map(p=>p.text||p.caption||'').filter(Boolean);
     $('#beats').innerHTML = beats.length ? beats.map(t=>`<li>${esc(t)}</li>`).join('')
@@ -116,7 +114,7 @@ function render(){
   const key=cur ? cur.round+':'+(cur.image||(cur.images||[]).join('|')) : '';
   if(key!==shown){ shown=key; $('#stage').innerHTML = cur ? stageHtml(cur,H) : ''; }
   if(!cur){
-    $('#stage').innerHTML = `<div class=msg>${d ? 'drawing page '+d.round+', <b>'+esc(d.title||'')+'</b>...' : busy ? 'the game master is writing...' : 'no page yet - phones give a noun and a verb, then press Go'}</div>`;
+    $('#stage').innerHTML = `<div class=msg>${d ? 'drawing page '+d.round+', <b>'+esc(d.title||'')+'</b>...' : busy ? 'the game master is writing...' : 'no page yet - phones answer their question, then press Go'}</div>`;
   }
 }
 $('#go').onclick=async()=>{

@@ -13,12 +13,14 @@ from a reference photo. Everyone who joins is put on a **secret side**, team Kil
 and told only their own. The prompts are Team 6's (`build/team_prompts.txt`, kept verbatim in
 `vercel-app/api/prompts/`), and the engine is what they describe:
 
-1. **Answer.** Players each lock in one **noun** and one **verb**, editable until Go. Every
-   phone and the projector show every word, alphabetically, with no names and no sides. There
-   is no scene to read first: the words make the setting.
+1. **Answer.** Each player gets one question, and which one depends on their secret side:
+   team Kill is asked **"What kills Yoland?"** and team Save **"What saves Yoland?"**. One
+   field, one answer, editable until Go. Every phone and the projector show every answer,
+   alphabetically, with no names and no sides, so nobody can tell whether "a trampoline" is a
+   rescue or a launch pad. There is no scene to read first: the answers make the setting.
 2. **Go** (no timer; the host presses it). One **Smash** call to the text LLM (Claude, reached
    through Comfy's Router at `api.comfy.org/proxy/anthropic/v1/messages` with a production key)
-   gets the Kill pool, the Save pool, the story so far, the continuity and a fixed verdict, and
+   gets the two pools of answers, the story so far, the continuity and a fixed verdict, and
    returns JSON: title, story, one plan per panel (visual, narration, position and shape), a
    single `page_prompt`, and the continuity plus the hook into the next round. **Round 1 also
    carries the hero's photo** and the writer names his look there, so there is no separate setup

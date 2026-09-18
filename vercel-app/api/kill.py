@@ -47,7 +47,7 @@ class handler(BaseHTTPRequestHandler):
             if action == "join":
                 return self._json(join(sess, body.get("voter"), body.get("name")))
             if action == "say":
-                return self._json(say(sess, body.get("voter"), body.get("noun"), body.get("verb")))
+                return self._json(say(sess, body.get("voter"), body.get("idea") or body.get("text")))
             if action == "config":
                 return self._json(config(sess, body.get("rounds"), body.get("render"), body.get("verdict")))
             if action == "start":
