@@ -51,6 +51,7 @@ h2{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut)
       <button class="v lives" id=vlives title="next round: Yoland lives">LIVES</button>
       <button class="v dies" id=vdies title="next round: Yoland dies">DIES</button>
       <button id=go>Go</button>
+      <button class=v id=reset title="wipe players, answers and pages; the hero stays">Reset</button>
     </span>
   </div>
   <div class=stage id=stage><div class=msg>starting up...</div></div>
@@ -122,6 +123,13 @@ $('#go').onclick=async()=>{
   busy=false; tick();
 };
 $('#vlives').onclick=()=>api({action:'config',verdict:'lives'}).then(tick);
+$('#reset').onclick=async()=>{
+  // Two clicks within five seconds, so a stray press mid-demo does nothing.
+  if($('#reset').dataset.armed){ $('#reset').textContent='Reset'; delete $('#reset').dataset.armed;
+    shown=''; settingUp=false; await api({action:'reset'}); tick(); return; }
+  $('#reset').dataset.armed='1'; $('#reset').textContent='Reset? click again';
+  setTimeout(()=>{ if($('#reset').dataset.armed){ delete $('#reset').dataset.armed; $('#reset').textContent='Reset'; } },5000);
+};
 $('#vdies').onclick=()=>api({action:'config',verdict:'dies'}).then(tick);
 async function tick(){
   try{
