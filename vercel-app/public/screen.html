@@ -90,7 +90,7 @@ $('#go').onclick = async () => {
   $('#go').disabled = true;
   $('#go').textContent = 'sending...';
   try{
-    const g = await api({action:'start'});
+    const g = await api({action:'start', submit:true});
     if(g.error){ $('#note').textContent = 'could not start: ' + g.error; }
     else if(g.skipped){ $('#note').textContent = g.skipped==='not yet' ? 'a picture is already drawn and waiting to go up' : g.skipped; }
   }catch(e){ $('#note').textContent = 'could not start: ' + e.message; }

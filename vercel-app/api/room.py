@@ -54,6 +54,11 @@ class handler(BaseHTTPRequestHandler):
             if action == "vote":
                 return self._json(vote(sess, body.get("item"), body.get("voter")))
             if action == "start":
+                # Only the Submit button may start a round. Older page code still open in
+                # somebody's browser auto-called start whenever the list was non-empty;
+                # without this flag it is refused, whatever the client thinks it is doing.
+                if not body.get("submit"):
+                    return self._json({"skipped": "only the Submit button on the screen page starts a round"})
                 return self._json(start(sess, force=bool(body.get("force"))))
             if action == "show":
                 return self._json(show(sess, body.get("round")))
