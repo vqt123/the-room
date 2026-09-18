@@ -26,11 +26,18 @@ and told only their own. The prompts are Team 6's (`build/team_prompts.txt`, kep
    carries the hero's photo** and the writer names his look there, so there is no separate setup
    step. **Round 2 is a continuation**: it opens on the aftermath of round 1, in the same world,
    and names that outcome in its first narration line.
-4. **Render, one Comfy job on the endpoint.** A **Nano Banana** API node inside the graph draws
+4. **Yoland reads it.** Each panel's line is written in **first person**, as Yoland narrating his
+   own misfortune, and the server turns each into speech through the Router's ElevenLabs proxy
+   (`/proxy/elevenlabs/v1/text-to-speech/<voice>`), four calls in parallel. His voice is a clone
+   made once from a twenty-second clip through `/proxy/elevenlabs/v1/voices/add`; until a clone
+   exists a stock male voice reads the lines, so the demo is never mute. The projector plays the
+   four clips in order and lights up each line as it is spoken.
+5. **Render, one Comfy job on the endpoint.** A **Nano Banana** API node inside the graph draws
    the whole page in one shot from `page_prompt`: four panels in a 2 x 2 grid on a square page,
    with the hero's photo as the first reference image and, from round 2, the previous page as
    the second (both scaled to the page shape and batched, because the node takes one image
-   input). The layout is manga-style: four panels of different sizes and shapes, slanted gutters
+   input). The page is **16:9 landscape** on **Nano Banana 2**, which is where Team 6's own
+   bake-off landed. The layout is manga-style: four panels of different sizes and shapes, slanted gutters
    cutting the page on a diagonal, and the last panel the biggest, bleeding off the edges.
    One generation for the whole page is what keeps the hero identical across panels;
    drawing each panel as its own job made him drift. **No lettering is drawn**: the four
@@ -46,6 +53,11 @@ Verdict rule: every round LIVES except the final round, which DIES; the host can
 from the shell. Neither page shows the verdict, so the audience cannot guess what is coming.
 Rounds per game default to 2. Measured: Setup 5 s, Smash 40-55 s on Sonnet, page 15-20 s.
 `killctl.sh` drives it from a shell.
+
+The phone and projector pages are styled after the team's comic mockups: dark speed-line paper,
+cream panels with heavy ink borders, gold bursts, and a secret team card. The card art and the
+hero photo are the team's own files and are **not** in this repo; drop your own into
+`vercel-app/public/assets/card-kill.jpg` and `card-save.jpg` to get the same cards.
 
 ## The Room (the earlier modes)
 
