@@ -290,7 +290,7 @@ function render(){
   $('#ideas').innerHTML=st.ideas.map(w=>`<span class="chip${w===mine?' mine':''}">${esc(w)}</span>`).join('')||'<span class=hint>Nothing yet.</span>';
   const d=st.drawing;
   $('#next').innerHTML = d ? `<div class=busy><span class=spin></span><div><b>Drawing round ${d.round}</b> &middot; ${Math.max(0,Math.round((st.now-d.ms)/1000))}s`
-    +`<div class=hint style="margin-top:2px">${esc(d.title||'')} &mdash; you can already answer for the next round.</div></div></div>` : '';
+    +`<div class=hint style="margin-top:2px">You can already answer for the next round.</div></div></div>` : '';
   const cur=st.current;
   const key=cur ? cur.round+':'+(cur.image||(cur.images||[]).join('|')) : '';
   if(key!==shown){

@@ -194,7 +194,7 @@ function render(){
   $('#ideas').innerHTML=st.ideas.map(w=>`<span class=bigchip>${esc(w)}</span>`).join('')
     || '<span class=empty>Nothing yet. Phones, answer your question.</span>';
   const busyText = busy ? 'The storyteller is writing...'
-    : d ? `Drawing round ${d.round}: ${esc(d.title||'')} - ${Math.max(0,Math.round((st.now-d.ms)/1000))}s` : '';
+    : d ? `Drawing round ${d.round} - ${Math.max(0,Math.round((st.now-d.ms)/1000))}s` : '';
   $('#cbusy').style.display = busyText ? '' : 'none';
   $('#cbusy').innerHTML = busyText ? '<span class=spin></span><span>'+busyText+'</span>' : '';
 
