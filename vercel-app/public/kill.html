@@ -225,6 +225,7 @@ if(!VOTER){VOTER=Math.random().toString(36).slice(2,12).replace(/[^a-z0-9]/g,'x'
 let NAME=localStorage.getItem('room_name')||'';
 $('#name').value=NAME;
 let st=null, joined=false, shown='', filledRound=0, cardSeen=false, heroName='Yoland';
+const PANEL_GAP_MS=1500;   // silence between panels while Yoland reads
 
 async function api(body){
   const r=await fetch('/api/kill',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -357,7 +358,8 @@ function render(){
     if(h) h.onclick=()=>{ const list=cur.audio||[]; let i=0;
       const a=new Audio();
       // A beat of silence between panels, the same as the big screen.
-      a.onended=a.onerror=()=>{ if(++i<list.length) setTimeout(()=>{ a.src=list[i]; a.play().catch(()=>{}); },1400); };
+      // The same gap as the big screen, so a phone and the projector stay in step.
+      a.onended=a.onerror=()=>{ if(++i<list.length) setTimeout(()=>{ a.src=list[i]; a.play().catch(()=>{}); },PANEL_GAP_MS); };
       a.src=list[0]; a.play().catch(()=>{}); };
   }
 }

@@ -174,7 +174,7 @@ $('#url').textContent=location.host+JOINPATH; $('#url').href=JOINPATH;
 let st=null, busy=false, shownComic='', view='collect', revealed=null;
 let workD=null, workKey='', skew=0, busyMs=0;
 let audio=new Audio(), playIdx=-1, playList=[], gapTimer=null;
-const PANEL_GAP_MS=1400;   // a beat of silence between panels, so the room can read and laugh
+const PANEL_GAP_MS=1500;   // a beat of silence between panels, so the room can read and laugh
 
 async function api(body){
   const r=await fetch('/api/kill',{method:'POST',headers:{'Content-Type':'application/json'},
