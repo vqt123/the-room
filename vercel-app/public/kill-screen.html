@@ -56,7 +56,7 @@ h2{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut)
     </span>
   </div>
   <div class=stage id=stage><div class=msg>starting up...</div></div>
-  <div class=scene id=scene><div class=n>scene</div><span id=scenetext>...</span></div>
+  <div class=scene id=scene style="display:none"><div class=n>the story so far</div><span id=scenetext></span></div>
   <div class=join>Join on your phone: <b id=url>-</b> &nbsp;&middot;&nbsp; <span id=note></span></div>
 </div>
 <div class=right>
@@ -73,7 +73,7 @@ h2{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut)
 const $=s=>document.querySelector(s);
 const SESS=(new URLSearchParams(location.search).get('sess')||'main').toLowerCase().replace(/[^a-z0-9-]/g,'').slice(0,24)||'main';
 $('#url').textContent=location.host+'/kill.html'+(SESS==='main'?'':'?sess='+SESS);
-let st=null, busy=false, shown='', settingUp=false;
+let st=null, busy=false, shown='';
 
 async function api(body){
   const r=await fetch('/api/kill',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -103,9 +103,10 @@ function render(){
   $('#busy').innerHTML = busy ? '<span class=spin></span>the game master is writing the story and planning the panels...'
     : d ? `<span class=spin></span>drawing page ${d.round}: ${esc(d.title||'')} - ${Math.max(0,Math.round((st.now-d.ms)/1000))}s` : '';
   $('#go').disabled = !st.can_start || busy;
-  $('#go').textContent = busy ? 'writing...' : d ? 'drawing page '+d.round+'...' : over ? 'game over' : !st.setup_done ? 'setting the scene...' : 'Go: smash '+st.answers+' answer'+(st.answers===1?'':'s');
-  $('#scenetext').textContent = over ? 'The End. Reset to play again.' : (st.scene || 'the game master is looking at the hero and setting the scene...');
-  $('#note').textContent = over ? '' : 'no timer - Go closes the pot';
+  $('#go').textContent = busy ? 'writing...' : d ? 'drawing page '+d.round+'...' : over ? 'game over' : 'Go: smash '+st.answers+' answer'+(st.answers===1?'':'s');
+  $('#scene').style.display = st.so_far ? '' : 'none';
+  $('#scenetext').textContent = st.so_far || '';
+  $('#note').textContent = over ? '' : 'no timer - the words make the scene, Go closes the pot';
   $('#teams').innerHTML = `<span>team Kill <b>${st.players.kill}</b></span><span>team Save <b>${st.players.save}</b></span><span>sides are secret; the game master knows</span>`;
   if(cur){ $('#story').style.display=''; $('#title').textContent='Round '+cur.round+': '+(cur.title||'');
     const beats=(cur.panels||[]).map(p=>p.text||p.caption||'').filter(Boolean);
@@ -115,9 +116,8 @@ function render(){
   const key=cur ? cur.round+':'+(cur.image||(cur.images||[]).join('|')) : '';
   if(key!==shown){ shown=key; $('#stage').innerHTML = cur ? stageHtml(cur,H) : ''; }
   if(!cur){
-    $('#stage').innerHTML = `<div class=msg>${d ? 'drawing page '+d.round+', <b>'+esc(d.title||'')+'</b>...' : busy ? 'the game master is writing...' : 'no page yet - phones answer the scene, then press Go'}</div>`;
+    $('#stage').innerHTML = `<div class=msg>${d ? 'drawing page '+d.round+', <b>'+esc(d.title||'')+'</b>...' : busy ? 'the game master is writing...' : 'no page yet - phones give a noun and a verb, then press Go'}</div>`;
   }
-  if(!st.setup_done && st.hero && !settingUp && !over){ settingUp=true; api({action:'setup'}).finally(()=>{settingUp=false; tick();}); }
 }
 $('#go').onclick=async()=>{
   busy=true; render();

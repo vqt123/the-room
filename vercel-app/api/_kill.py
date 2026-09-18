@@ -1,13 +1,13 @@
 """Kill or Save, on Team 6's prompts: one hero (Yoland), two secret teams, one comic page per round.
 
 How a game runs (build/team_prompts.txt is the source; this is the engine it describes):
-  1. Setup, once: the text LLM (Claude, through Comfy's Router) reads the hero's photo and
-     writes a visual description plus round 1's scene: a place and an activity, no obstacle.
-  2. Players read the scene and each submit one NOUN and one VERB. Everyone sees every word;
-     nobody sees teams. Sides are secret, assigned on join.
-  3. Go (the host): the Smash call gets the KILL pool, the SAVE pool, the story so far and a
+  1. Players each submit one NOUN and one VERB. Everyone sees every word; nobody sees teams.
+     Sides are secret, assigned on join. There is no scene to read first: the words make the
+     setting (Vinh, 2026-09-18).
+  2. Go (the host): ONE Smash call gets the KILL pool, the SAVE pool, the story so far and a
      fixed verdict, and returns the story, the panel plans, one page_prompt, the continuity
-     and the next round's scene, as JSON.
+     and the hook into the next round, as JSON. Round 1 also carries the hero's photo and the
+     writer names his look there; every later round picks up moments after the last page.
   4. Render, one Comfy job on the endpoint: a Nano Banana API node draws the whole page from
      page_prompt with the hero's photo (and from round 2 the previous page) as references.
      Fallback per session: the panel plans drawn as four separate pictures on the GPU, with the
@@ -35,7 +35,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import _blob, _kv, _llm
 from _core import check_password  # noqa: F401
 from _findcore import _output, client, poll, story_panels
-from _findgraph import COMIC_STYLE, HERO_DRAW, HERO_NAME, build_page, build_panels
+from _findgraph import COMIC_STYLE, HERO_DRAW, HERO_LOOK, HERO_NAME, build_page, build_panels
 
 TTL_S = 86_400
 LOCK_MS = 120_000
@@ -44,8 +44,10 @@ PAGE_MS = 25_000             # a Nano Banana page, for the countdown on screen
 PANELS_MS = 55_000
 # The image model will happily draw a fifth frame if the page leaves room, so the count is
 # restated by us at the end of the prompt rather than trusted to the writer (seen 2026-09-18).
-PAGE_TAIL = (" The page has exactly four panels in two rows of two, all the same size. Do not draw a fifth panel, "
-             "an inset panel, a repeated panel, or a title banner.")
+PAGE_TAIL = (" Dynamic manga-style page layout: exactly four panels of deliberately different sizes and shapes, "
+             "some edges slanted so a gutter cuts across the page on a diagonal, thick black panel borders, white "
+             "gutters, the last panel the largest. The panels must not overlap each other. Do not draw a fifth "
+             "panel, an inset panel, a repeated panel, or a title banner.")
 TEAMS = ("kill", "save")
 NAME_RE = re.compile(r"^[a-z0-9]{6,12}$")
 WORD_RE = re.compile(r"[^a-z0-9' \-]+")
@@ -271,9 +273,12 @@ def state(sess, voter=None):
     done = [p for p in pages if p["state"] == "done"]
     finished = len(rounds) >= total and all(rec.get("done_ms") or rec.get("error") for rec in rounds.values())
     me = players.get(voter) if voter else None
+    last = done[-1] if done else None
     return {"now": now, "sess": sess, "hero": get_hero(sess), "hero_name": HERO_NAME,
             "hero_description": (meta["setup"] or {}).get("hero_description"),
-            "setup_done": bool(meta["setup"]), "scene": meta["scene"],
+            # There is no scene step any more: the words make the setting. What the room needs
+            # between rounds is where the story got to, so round 2 reads as a continuation.
+            "so_far": (last or {}).get("story") or "",
             "round": r, "total_rounds": total, "final": r >= total, "finished": finished,
             "next_verdict": verdict_for(sess, r), "verdict_override": verdict_override(sess) or "auto",
             "render": render_mode(sess),
@@ -282,33 +287,10 @@ def state(sess, voter=None):
             "players": {t: sum(1 for p in players.values() if p["t"] == t) for t in TEAMS},
             "me": {"team": me["t"], "name": me["n"]} if me else None,
             "pages": pages, "current": done[-1] if done else None, "drawing": drawing,
-            "can_start": drawing is None and bool(this) and r <= total and bool(meta["setup"]) and not finished}
+            "can_start": drawing is None and bool(this) and r <= total and not finished}
 
 
 # ---- the three calls --------------------------------------------------------------------------
-
-def setup(sess, force=False):
-    """Prompt 1: read the photo, write the hero description and round 1's scene. Idempotent."""
-    _, _, _, meta = _load(sess)
-    if meta["setup"] and not force:
-        return {"setup": meta["setup"], "scene": meta["scene"], "cached": True}
-    if _kv.cmd("SET", f"ks:{sess}:setuplock", "held", "NX", "PX", LOCK_MS) is None:
-        return {"skipped": "setup is already running"}
-    try:
-        photo = _hero_bytes(sess)
-        if not photo:
-            raise ValueError("no hero photo for this session yet (killctl.sh hero photo.png)")
-        kind = "image/png" if photo[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
-        got = _llm.setup(HERO_NAME, total_rounds(sess), photo, kind)
-        if not got["scene"] or not got["hero_description"]:
-            raise RuntimeError("setup came back incomplete: " + got["raw"][:200])
-        rec = {"hero_description": got["hero_description"], "scene": got["scene"]}
-        _kv.pipe([["HSET", _k(sess), "setup", json.dumps(rec)], ["HSET", _k(sess), "scene", got["scene"]],
-                  ["HSET", _k(sess), "round", "1"], ["EXPIRE", _k(sess), TTL_S]])
-        return {"setup": rec, "scene": got["scene"], "cached": False}
-    finally:
-        _unlock(f"ks:{sess}:setuplock")
-
 
 def _panel_prompts(hero_description, cont, plan):
     """The per-panel prompts: the hero's current look and what the panel shows. The hero clause
@@ -331,9 +313,6 @@ def start(sess):
         st = state(sess)
         if st["drawing"]:
             return {"skipped": "a page is still being drawn"}
-        if not st["setup_done"]:
-            setup(sess)
-            st = state(sess)
         if st["finished"] or st["round"] > st["total_rounds"]:
             return {"skipped": "the game is over; reset to play again"}
         if not st["answers"]:
@@ -347,20 +326,24 @@ def start(sess):
         prev_done = [n for n in sorted(rounds) if rounds[n].get("done_ms") and rounds[n].get("render") != "panels"]
         render = render_mode(sess)
         use_prev = render != "panels" and bool(prev_done)
-        plan = _llm.smash(HERO_NAME, r, total, verdict.upper(), meta["setup"]["hero_description"], meta["scene"],
+        hero = _hero_bytes(sess)
+        look = (meta["setup"] or {}).get("hero_description")
+        # Round 1 carries the photo and the writer names the hero's look; later rounds reuse it.
+        photo = hero if (hero and not look) else None
+        kind = "image/png" if (photo and photo[:8] == b"\x89PNG\r\n\x1a\n") else "image/jpeg"
+        plan = _llm.smash(HERO_NAME, r, total, verdict.upper(), look, meta["scene"],
                           previous, meta["cont"], pools["kill"]["nouns"], pools["kill"]["verbs"],
                           pools["save"]["nouns"], pools["save"]["verbs"], previous_page=use_prev,
-                          panels_exactly=4)
+                          panels_exactly=4, photo=photo, photo_type=kind)
+        look = look or str(plan.get("hero_description") or "").strip() or HERO_LOOK
         panels = plan.get("panels") or []
         if not panels or (render != "panels" and not plan.get("page_prompt")):
             raise RuntimeError("the smash came back without panels or a page prompt: " + plan.get("raw", "")[:200])
         panels = panels[:4]
         seed = random.randrange(1, 2 ** 31)
         c = client()
-        hero = _hero_bytes(sess)
         if render == "panels":
-            g = build_panels(_panel_prompts(meta["setup"]["hero_description"], meta["cont"], panels), seed=seed,
-                             hero=bool(hero), look=meta["setup"]["hero_description"])
+            g = build_panels(_panel_prompts(look, meta["cont"], panels), seed=seed, hero=bool(hero), look=look)
         else:
             g = build_page(plan["page_prompt"] + PAGE_TAIL, seed=seed, previous_page=use_prev,
                            pro=(render == "pro"))
@@ -379,6 +362,7 @@ def start(sess):
                "continuity": plan.get("continuity") or {}, "next_scene": plan.get("next_scene"),
                "n_panels": len(panels)}
         cmds = [["HSET", _k(sess), f"n:{r}", json.dumps(rec)],
+                ["HSET", _k(sess), "setup", json.dumps({"hero_description": look})],
                 ["HSET", _k(sess), "round", str(r + 1)],
                 ["HSET", _k(sess), "cont", json.dumps(rec["continuity"])],
                 ["HSET", _k(sess), "scene", plan.get("next_scene") or ""],

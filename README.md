@@ -13,22 +13,24 @@ from a reference photo. Everyone who joins is put on a **secret side**, team Kil
 and told only their own. The prompts are Team 6's (`build/team_prompts.txt`, kept verbatim in
 `vercel-app/api/prompts/`), and the engine is what they describe:
 
-1. **Setup, once.** The text LLM (Claude, reached through Comfy's Router at
-   `api.comfy.org/proxy/anthropic/v1/messages` with a production key) reads the hero's photo
-   and writes a visual description plus round 1's scene: a place and an activity, no obstacle.
-   The screen page triggers it the first time it loads.
-2. **Answer.** Players read the scene and each lock in one **noun** and one **verb**, editable
-   until Go. Every phone and the projector show every word, alphabetically, with no names and
-   no sides.
-3. **Go** (no timer; the host presses it). The **Smash** call gets the Kill pool, the Save pool,
-   the story so far, the continuity and a fixed verdict, and returns JSON: title, story, one
-   plan per panel (visual, caption, bubbles), a single `page_prompt`, continuity and the next
-   round's scene. The next scene goes up at once, so people answer round 2 while page 1 draws.
+1. **Answer.** Players each lock in one **noun** and one **verb**, editable until Go. Every
+   phone and the projector show every word, alphabetically, with no names and no sides. There
+   is no scene to read first: the words make the setting.
+2. **Go** (no timer; the host presses it). One **Smash** call to the text LLM (Claude, reached
+   through Comfy's Router at `api.comfy.org/proxy/anthropic/v1/messages` with a production key)
+   gets the Kill pool, the Save pool, the story so far, the continuity and a fixed verdict, and
+   returns JSON: title, story, one plan per panel (visual, narration, position and shape), a
+   single `page_prompt`, and the continuity plus the hook into the next round. **Round 1 also
+   carries the hero's photo** and the writer names his look there, so there is no separate setup
+   step. **Round 2 is a continuation**: it opens on the aftermath of round 1, in the same world,
+   and names that outcome in its first narration line.
 4. **Render, one Comfy job on the endpoint.** A **Nano Banana** API node inside the graph draws
    the whole page in one shot from `page_prompt`: four panels in a 2 x 2 grid on a square page,
    with the hero's photo as the first reference image and, from round 2, the previous page as
    the second (both scaled to the page shape and batched, because the node takes one image
-   input). One generation for the whole page is what keeps the hero identical across panels;
+   input). The layout is manga-style: four panels of different sizes and shapes, slanted gutters
+   cutting the page on a diagonal, and the last panel the biggest, bleeding off the edges.
+   One generation for the whole page is what keeps the hero identical across panels;
    drawing each panel as its own job made him drift. **No lettering is drawn**: the four
    narration lines the Smash writes are printed beside the page instead. The image model adds a
    fifth frame when it can, so the server restates the panel count at the end of the prompt.

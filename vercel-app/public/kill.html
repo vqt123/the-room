@@ -46,7 +46,7 @@ h3{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)
 </style>
 <div class=wrap>
 <h1>Kill or Save</h1>
-<p class=sub>One hero: <b id=heroname>Yoland</b>. Two secret teams. Read the scene, then give one noun and one verb. Everyone sees every word; nobody knows whose, or which side it serves.</p>
+<p class=sub>One hero: <b id=heroname>Yoland</b>. Two secret teams. Give one noun and one verb. Everyone sees every word; nobody knows whose, or which side it serves.</p>
 
 <div class=card id=joincard>
   <div class=row><input type=text id=name placeholder="your name" maxlength=14></div>
@@ -56,7 +56,7 @@ h3{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)
 
 <div id=game style="display:none">
   <div class=team id=team></div>
-  <div class=scene id=scene><div class=n>scene</div><span id=scenetext>waiting for the game master...</span></div>
+  <div class=scene id=scene style="display:none"><div class=n>the story so far</div><span id=scenetext></span></div>
   <div class=card id=answer>
     <div class=row><input type=text id=noun placeholder="a noun: anvil" maxlength=24 autocomplete=off autocapitalize=off><input type=text id=verb placeholder="a verb: juggle" maxlength=24 autocomplete=off autocapitalize=off></div>
     <div class=row style="margin-top:8px"><button id=add style="flex:1">Lock in</button></div>
@@ -137,7 +137,9 @@ function render(){
   $('#heroname').textContent=st.hero_name;
   $('#round').textContent=st.round; $('#total').textContent=st.total_rounds; $('#count').textContent=st.answers;
   const over = st.finished || st.round>st.total_rounds;
-  $('#scenetext').textContent = over ? 'The End. The host can reset for a new game.' : (st.scene || 'waiting for the game master to set the scene...');
+  const so = over ? 'The End. The host can reset for a new game.' : (st.so_far || '');
+  $('#scene').style.display = so ? '' : 'none';
+  $('#scenetext').textContent = so;
   $('#answer').style.display = over ? 'none' : '';
   if(st.mine && filledRound!==st.round){ filledRound=st.round; $('#noun').value=st.mine.noun||''; $('#verb').value=st.mine.verb||''; }
   if(!st.mine && filledRound!==st.round){ filledRound=st.round; $('#noun').value=''; $('#verb').value=''; $('#addst').textContent=''; }

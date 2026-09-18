@@ -7,7 +7,7 @@ from urllib.parse import parse_qs, urlparse
 # Appended, not prepended: api/queue.py would otherwise shadow the standard
 # library's queue module for anything these handlers import.
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from _kill import advance, config, join, publish, reset, say, set_hero, setup, start, state
+from _kill import advance, config, join, publish, reset, say, set_hero, start, state
 
 SESS_OK = set("abcdefghijklmnopqrstuvwxyz0123456789-")
 
@@ -48,8 +48,6 @@ class handler(BaseHTTPRequestHandler):
                 return self._json(join(sess, body.get("voter"), body.get("name")))
             if action == "say":
                 return self._json(say(sess, body.get("voter"), body.get("noun"), body.get("verb")))
-            if action == "setup":
-                return self._json(setup(sess, force=bool(body.get("force"))))
             if action == "config":
                 return self._json(config(sess, body.get("rounds"), body.get("render"), body.get("verdict")))
             if action == "start":

@@ -3,7 +3,6 @@
 #   ./killctl.sh state [sess]                  the shared state
 #   ./killctl.sh reset [sess]                  wipe the game (players, answers, setup, pages); hero + settings stay
 #   ./killctl.sh hero photo.png [sess]         the hero's photo; "hero clear" drops it
-#   ./killctl.sh setup [sess]                  re-run the game master's setup (hero description + round 1 scene)
 #   ./killctl.sh join NAME VOTER [sess]        join as a player (VOTER = 6-12 lowercase letters/digits)
 #   ./killctl.sh say NOUN VERB VOTER [sess]    answer this round
 #   ./killctl.sh go [sess]                     press Go: smash, then render
@@ -18,14 +17,13 @@ case "$1" in
   state) curl -s "$APP/api/kill?sess=${2:-main}" | $PY -c "
 import sys,json;d=json.load(sys.stdin)
 if d.get('error'): print('error:',d['error']); raise SystemExit(1)
-print('round   :',d['round'],'of',d['total_rounds'],'| next:',d['next_verdict'],'(',d['verdict_override'],') | render:',d['render'],'| players:',d['players'],'| hero:',bool(d['hero']),'| setup:',d['setup_done'])
-print('scene   :',d['scene'])
+print('round   :',d['round'],'of',d['total_rounds'],'| next:',d['next_verdict'],'(',d['verdict_override'],') | render:',d['render'],'| players:',d['players'],'| hero:',bool(d['hero']))
+print('so far  :',d['so_far'][:110])
 print('pot     : nouns',d['nouns'],'verbs',d['verbs'],'|',d['answers'],'answered')
 print('drawing :',d['drawing'] and ('page %s, %ss in' % (d['drawing']['round'], (d['now']-d['drawing']['ms'])//1000)))
 for c in d['pages']:
     print('  page',c['round'],c['state'],c['verdict'],'|',c.get('title'),'|',c.get('error') or c.get('image') or c.get('images'))" ;;
   reset) post "{\"action\":\"reset\",\"sess\":\"${2:-main}\"}" ;;
-  setup) post "{\"action\":\"setup\",\"sess\":\"${2:-main}\",\"force\":true}" ;;
   hero)  if [ "$2" = "clear" ]; then post "{\"action\":\"hero\",\"clear\":true,\"sess\":\"${3:-main}\"}"
          else $PY -c "import json,base64,sys;print(json.dumps({'action':'hero','sess':sys.argv[2],'image':base64.b64encode(open(sys.argv[1],'rb').read()).decode()}))" "$2" "${3:-main}" \
               | curl -s -X POST "$APP/api/kill" -H 'Content-Type: application/json' --data-binary @-; echo; fi ;;
