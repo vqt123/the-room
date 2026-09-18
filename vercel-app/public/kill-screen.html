@@ -48,8 +48,6 @@ h2{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut)
     <span class=hero id=hero></span>
     <span class=ctl>
       <span id=roundlbl style="color:var(--mut);font-size:16px">round 1 of 2</span>
-      <button class="v lives" id=vlives title="next round: Yoland lives">LIVES</button>
-      <button class="v dies" id=vdies title="next round: Yoland dies">DIES</button>
       <button id=go>Go</button>
       <button class=v id=reset title="wipe players, answers and pages; the hero stays">Reset</button>
     </span>
@@ -97,7 +95,6 @@ function render(){
   const heroHtml = st.hero ? `<img src="${st.hero}" alt=""><span>starring ${H}</span>` : `<span>starring ${H}</span>`;
   if($('#hero').innerHTML!==heroHtml) $('#hero').innerHTML=heroHtml;
   $('#roundlbl').textContent = over ? 'game over' : 'round '+st.round+' of '+st.total_rounds;
-  $('#vlives').className='v lives'+(st.next_verdict==='lives'?' on':''); $('#vdies').className='v dies'+(st.next_verdict==='dies'?' on':'');
   $('#fhead').textContent = over ? 'The End' : 'In the pot for round '+st.round+' - '+st.answers+' answered';
   $('#nouns').innerHTML=st.nouns.map(w=>`<span class=chip>${esc(w)}</span>`).join('')||'<span style="color:var(--mut)">none yet</span>';
   $('#verbs').innerHTML=st.verbs.map(w=>`<span class=chip>${esc(w)}</span>`).join('')||'<span style="color:var(--mut)">none yet</span>';
@@ -106,9 +103,9 @@ function render(){
   $('#go').disabled = !st.can_start || busy;
   $('#go').textContent = busy ? 'writing...' : d ? 'drawing page '+d.round+'...' : over ? 'game over' : !st.setup_done ? 'setting the scene...' : 'Go: smash '+st.answers+' answer'+(st.answers===1?'':'s');
   $('#scenetext').textContent = over ? 'The End. Reset to play again.' : (st.scene || 'the game master is looking at the hero and setting the scene...');
-  $('#note').textContent = over ? '' : 'no timer - Go closes the pot. Next: '+H+' '+st.next_verdict+(st.verdict_override==='auto'?' (script)':' (host override)');
+  $('#note').textContent = over ? '' : 'no timer - Go closes the pot';
   $('#teams').innerHTML = `<span>team Kill <b>${st.players.kill}</b></span><span>team Save <b>${st.players.save}</b></span><span>sides are secret; the game master knows</span>`;
-  if(cur){ $('#story').style.display=''; $('#title').innerHTML='Round '+cur.round+': '+esc(cur.title||'')+`<span class="fate ${cur.verdict}">${H} ${cur.verdict}</span>`; $('#storytext').textContent=cur.story||''; }
+  if(cur){ $('#story').style.display=''; $('#title').textContent='Round '+cur.round+': '+(cur.title||''); $('#storytext').textContent=cur.story||''; }
   else $('#story').style.display='none';
   const key=cur ? cur.round+':'+(cur.image||(cur.images||[]).join('|')) : '';
   if(key!==shown){ shown=key; $('#stage').innerHTML = cur ? stageHtml(cur,H) : ''; }
@@ -122,7 +119,6 @@ $('#go').onclick=async()=>{
   try{ const g=await api({action:'start',submit:true}); if(g.error||g.skipped){ $('#busy').textContent=g.error||g.skipped; } }catch(e){}
   busy=false; tick();
 };
-$('#vlives').onclick=()=>api({action:'config',verdict:'lives'}).then(tick);
 $('#reset').onclick=async()=>{
   // Two clicks within five seconds, so a stray press mid-demo does nothing.
   if($('#reset').dataset.armed){ $('#reset').textContent='Reset'; delete $('#reset').dataset.armed;
@@ -130,7 +126,6 @@ $('#reset').onclick=async()=>{
   $('#reset').dataset.armed='1'; $('#reset').textContent='Reset? click again';
   setTimeout(()=>{ if($('#reset').dataset.armed){ delete $('#reset').dataset.armed; $('#reset').textContent='Reset'; } },5000);
 };
-$('#vdies').onclick=()=>api({action:'config',verdict:'dies'}).then(tick);
 async function tick(){
   try{
     st=await pull();

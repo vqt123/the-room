@@ -109,7 +109,6 @@ $('#add').onclick=async()=>{
 };
 
 function pageHtml(cur,H){
-  const fate=`<span class="fate ${cur.verdict}">${H} ${cur.verdict}</span>`;
   let body='';
   if(cur.image){ body=`<div class=page><img src="${cur.image}" alt="comic page ${cur.round}"></div>`; }
   else if(cur.images){
@@ -118,7 +117,7 @@ function pageHtml(cur,H){
         (p.caption?`<div class=cap>${esc(p.caption)}</div>`:'')+
         (p.bubbles||[]).map(b=>`<div class=bub>${b.type==='sfx'?'':esc(b.speaker||'')+': '}${esc(b.text)}</div>`).join('')+`</div>`;}).join('')+'</div>';
   }
-  return `<div class=title>Round ${cur.round}: ${esc(cur.title||'')} ${fate}</div>`+body+`<div class=story>${esc(cur.story||'')}</div>`;
+  return `<div class=title>Round ${cur.round}: ${esc(cur.title||'')}</div>`+body+`<div class=story>${esc(cur.story||'')}</div>`;
 }
 
 function render(){
