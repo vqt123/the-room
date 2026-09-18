@@ -45,7 +45,13 @@ def claude(system, user_text, image_bytes=None, image_type="image/png", model=MO
                                                     "data": base64.b64encode(image_bytes).decode()}})
     content.append({"type": "text", "text": user_text})
     # v2 names the model in the path; the body is the Messages body otherwise unchanged.
-    body = {"max_tokens": max_tokens, "system": system,
+    # The system prompt is the same 5k tokens every round, so it is marked cacheable: after the
+    # first call of a game the model reads it instead of re-reading it. Thinking is turned off
+    # because it is pure wall-clock here: the room waits while it happens and never sees it, and
+    # a round died on 2026-09-18 when it ate the whole token budget before a word of JSON.
+    body = {"max_tokens": max_tokens,
+            "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+            "thinking": {"type": "disabled"},
             "messages": [{"role": "user", "content": content}]}
     req = urllib.request.Request(f"{ROUTER}/{model}", data=json.dumps(body).encode(), method="POST", headers={
         "Content-Type": "application/json", "X-API-KEY": key, "Authorization": f"Bearer {key}"})
@@ -130,7 +136,7 @@ HERO_RULES = ("- The first image attached to this message is a photo of the hero
 
 def smash(hero_name, round_number, total_rounds, verdict, hero_description, current_scene, previous_rounds,
           continuity, kill_ideas, save_ideas, previous_page=False, panels_exactly=4,
-          photo=None, photo_type="image/png"):
+          photo=None, photo_type="image/png", model=None):
     """The one LLM call per round: the story, the panel plans, the page prompt, the continuity and
     the hook into the next round. There is no separate setup step any more (Vinh, 2026-09-18):
     round 1 carries the hero's photo and invents the setting from the words, and every later
@@ -173,34 +179,40 @@ def smash(hero_name, round_number, total_rounds, verdict, hero_description, curr
               f"- {join(kill_ideas)}", "",
               f"SAVE POOL, their answers to \"what saves him?\":", f"- {join(save_ideas)}"]
     if panels_exactly:
-        lines += ["", "THIS GAME'S RENDER (overrides PANEL STRUCTURE counts, LETTERING and THE PAGE PROMPT):",
-                  f"- Plan EXACTLY {panels_exactly} panels this round, whatever the round number: fold the beats "
-                  f"into {panels_exactly} moments, the last one the OUTCOME.",
-                  "- LAYOUT, manga style on a WIDE LANDSCAPE page: the four panels are NOT a plain grid. Vary "
-                  "their size and shape across the page: a tall narrow panel down one side, a wide letterbox "
-                  "strip, a couple of slanted edges so at least one gutter cuts the page on a diagonal, and the "
-                  "OUTCOME panel clearly the biggest, often bleeding to the page edge. They still read left to "
-                  "right, they never overlap, and there are still exactly four of them. Write \"layout\" as that "
-                  "words, and every panel's \"page_position\" as its place, size and shape together, e.g. \"tall "
-                  "narrow panel down the left third, slanted right edge\" or \"wide panel across the bottom half, "
-                  "bleeding off both edges\".",
-                  "- Match the camera to the shape: a tall panel wants a full-body or falling figure, a wide one "
-                  "wants a landscape or a horizontal action sweep, the big one wants the impact.",
-                  "- The whole page is drawn in ONE shot, so PANEL FLOW matters more than anything else: the four "
-                  "panels are one continuous moment, same place, same time, same screen direction.",
-                  "- NO lettering is drawn on the page. Write \"caption\" and \"bubbles\" as usual in the JSON (the "
-                  "audience reads them beside the page), but the \"page_prompt\" must not mention captions, speech "
-                  "bubbles, sound effects, signs, labels or any other text: give each panel its visual only, and "
-                  "close the page prompt with \"No text, letters, numbers, speech bubbles, caption boxes or sound "
-                  "effects anywhere on the page.\" before the art style.",
-                  f"- Add to every panel object a field \"text\": {hero_name.upper()} NARRATING THAT PANEL HIMSELF, "
-                  f"out loud, in FIRST PERSON and present tense: \"I stroll into the market, and that is when the "
-                  f"anvil finds me.\" One or two sentences, max 30 words, said the way a person talks, because it "
-                  f"is read aloud in his voice. Never write \"{hero_name}\" in the third person there, never say "
-                  f"\"Panel 1\", and use plain words a voice can say: no emoji, no asterisks, no stage directions "
-                  f"in brackets. He can react, complain and joke about what is happening to him. The four \"text\" "
-                  f"fields read in order must tell the whole story on their own.",
-                  "- \"story\" and \"outcome\" stay in the third person, for the record; only \"text\" is his voice.",
+        lines += ["", "THIS GAME'S RENDER. It REPLACES the JSON shape above: send these fields and no others.",
+                  "{\"title\", \"story\", \"outcome\", \"panels\":[{\"text\"}], \"page_prompt\", "
+                  "\"continuity\", \"next_scene\"}",
+                  "- No \"visual\", no \"caption\", no \"bubbles\", no \"page_position\", no \"layout\", no "
+                  "\"sfx\", no \"camera\". Nothing reads them, and every one of them is time the room spends "
+                  "waiting for a field nobody will ever see. A panel object has exactly one key: \"text\".",
+                  f"- EXACTLY {panels_exactly} panels this round, whatever the round number: fold the beats into "
+                  f"{panels_exactly} moments, the last one the OUTCOME.",
+                  f"- Every panel's \"text\" is {hero_name.upper()} NARRATING THAT PANEL HIMSELF, out loud, in "
+                  f"FIRST PERSON and present tense: \"I stroll into the market, and that is when the anvil finds "
+                  f"me.\" One or two sentences, max 30 words, said the way a person talks, because it is read "
+                  f"aloud in his voice. Never write \"{hero_name}\" in the third person there, never say "
+                  f"\"Panel 1\", no emoji, no asterisks, no stage directions in brackets. He can react, complain "
+                  f"and joke about what is happening to him. The four \"text\" fields read in order must tell the "
+                  f"whole story on their own.",
+                  "- \"story\" and \"outcome\" stay in the third person, for the record; only \"text\" is his "
+                  "voice.",
+                  "- \"page_prompt\" is the ONLY thing the image model sees, so everything visual lives there and "
+                  "nowhere else. Open it with EXACTLY this count, in these words: \"A comic page with exactly 4 "
+                  "panels and no others.\" Then the layout in one sentence, manga style on a WIDE LANDSCAPE page: "
+                  "four panels of different sizes and shapes, not a plain grid, a tall narrow panel down one side, "
+                  "a wide letterbox strip, a slanted edge or two so a gutter cuts the page on a diagonal, the "
+                  "OUTCOME panel clearly the biggest, reading left to right, never overlapping. Then exactly four "
+                  "sentences, each starting \"Panel 1:\", \"Panel 2:\", \"Panel 3:\", \"Panel 4:\", saying what "
+                  "is in that frame and the camera, matching the camera to the shape: a tall panel wants a falling "
+                  "or full-body figure, a wide one a horizontal sweep, the big one the impact. The four panels are "
+                  "ONE continuous moment: same place, same time, same screen direction.",
+                  "- NEVER add a fifth frame. No establishing shot, no scene-setting strip, no wide empty view of "
+                  "the location, no inset, no title banner, no repeated panel. Panel 1 already establishes the "
+                  f"place WITH {hero_name} in it, so a panel showing the location on its own is one frame too "
+                  "many. Four sentences, four panels, and the hero is visible in every one of them.",
+                  "- NO lettering anywhere on the page: the page_prompt must not mention captions, speech bubbles, "
+                  "sound effects, signs or labels, and it closes with \"No text, letters, numbers, speech bubbles, "
+                  "caption boxes or sound effects anywhere on the page.\" before the art style.",
                   "", "LENGTH (this decides how long the room waits, so it is not negotiable):",
                   "- The size of the pot NEVER changes the size of the page. Thirty answers and three answers "
                   "both produce exactly four panels, the same length of narration and the same page prompt. Extra "
@@ -211,14 +223,11 @@ def smash(hero_name, round_number, total_rounds, verdict, hero_description, curr
                   "- Work in as many of the answers as you can, aiming for at least two thirds of each pool, "
                   "by crowding several into one panel rather than by adding panels or sentences.",
                   "- Hard sizes, counted: \"story\" max 45 words. \"outcome\" max 25 words. Each panel's "
-                  "\"visual\" max 20 words (it is only a backup; the page prompt is what gets drawn). Each "
-                  "panel's \"text\" max 30 words.",
+                  "\"text\" max 30 words.",
                   "- \"page_prompt\" is the one field that must stay complete: it is the only thing the "
                   "image model ever sees, so it always describes the layout once and then all four panels, "
                   "and it always ends with the art style. Aim for about 250 words by giving each panel one "
                   "tight sentence, never by leaving a panel out or by shortening it to a stub.",
-                  "- Write \"bubbles\": [] for every panel. Nothing is lettered on the page and nothing reads "
-                  "them, so any bubble text is pure delay.",
                   "- No commentary, no explanation, no notes about what you used or skipped: the JSON only."]
     if previous_rounds:
         lines += ["", "THIS IS A CONTINUATION, NOT A NEW STORY:",
@@ -243,7 +252,8 @@ def smash(hero_name, round_number, total_rounds, verdict, hero_description, curr
         return got
 
     system = prompt_file("smash.txt") + "\n" + "\n".join(lines)
-    text = claude(system, "Go.", photo, photo_type, max_tokens=12000, timeout=180)
+    model = model or MODEL_FUNNY
+    text = claude(system, "Go.", photo, photo_type, model=model, max_tokens=12000, timeout=180)
     try:
         got = check(parse_json(text))
     except ValueError:
@@ -251,7 +261,7 @@ def smash(hero_name, round_number, total_rounds, verdict, hero_description, curr
         text = claude(system, "Your last reply was unusable. Send the whole page again as ONE valid JSON "
                               "object: no prose, no markdown fence, no real line breaks inside strings, all "
                               f"{panels_exactly} panels, and \"page_prompt\" written out in full.",
-                      photo, photo_type, max_tokens=12000, timeout=180)
+                      photo, photo_type, model=model, max_tokens=12000, timeout=180)
         got = check(parse_json(text))
     got["raw"] = text
     return got

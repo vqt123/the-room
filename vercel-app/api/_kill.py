@@ -373,7 +373,8 @@ def _panel_prompts(hero_description, cont, plan):
         who += f"; right now {look}"
     if carrying:
         who += f"; carrying {carrying}"
-    return [(who + ". What happens: " + str(p.get("visual", ""))[:600] + COMIC_STYLE) for p in plan]
+    return [(who + ". What happens: " + str(p.get("visual") or p.get("text") or "")[:600] + COMIC_STYLE)
+            for p in plan]
 
 
 def start(sess):
