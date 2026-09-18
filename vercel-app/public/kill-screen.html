@@ -110,7 +110,6 @@ h2{font-family:Bangers,Impact,sans-serif;transform:skewX(-7deg);letter-spacing:.
     </span>
   </div>
   <div class=stage id=stage><div class=msg>starting up...</div></div>
-  <div class=panel id=scene style="display:none"><div class=n>The story so far</div><div class=body id=scenetext></div></div>
   <div class=join>Join on your phone: <a id=url href="kill.html" target="_blank" rel=noopener>-</a> &nbsp;&middot;&nbsp; <span id=note></span></div>
 </div>
 <div class=right>
@@ -182,9 +181,6 @@ function render(){
   $('#busy').innerHTML = busyText ? '<span class=spin></span><span>'+busyText+'</span>' : '';
   $('#go').disabled = !st.can_start || busy;
   $('#go').querySelector('i').textContent = busy ? 'Writing...' : d ? 'Drawing...' : over ? 'Game over' : 'Go ('+st.answers+')';
-  const so = over ? '' : (st.so_far || '');
-  $('#scene').style.display = so ? '' : 'none';
-  $('#scenetext').textContent = so;
   $('#note').textContent = over ? 'Reset for a new game' : 'No timer - Go closes the pot and draws the page';
   // Only the head count. The per-team split was a leak: with the words on screen the room could
   // start guessing which side an answer came from (Alex Tov, 2026-09-18).

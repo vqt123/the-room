@@ -129,7 +129,7 @@ def total_rounds(sess):
 
 
 def render_mode(sess):
-    m = _kv.cmd("GET", f"ks:{sess}:render") or "page"
+    m = _kv.cmd("GET", f"ks:{sess}:render") or "pro"
     return m if m in RENDERS else "page"
 
 
@@ -424,7 +424,9 @@ def _retry(sess, rec, why):
     tries = int(rec.get("tries", 0)) + 1
     rec["tries"] = tries
     rec["last_error"] = str(why)[:200]
-    plan = {1: ("page", True), 2: ("panels", False)}.get(tries)
+    # Retry ladder: the other Nano Banana, then our own GPU.
+    plan = {1: ("page" if rec.get("render") == "pro" else "pro", rec.get("render") != "pro"),
+            2: ("panels", False)}.get(tries)
     if plan and rec.get("panels"):
         render, pro = plan
         try:
