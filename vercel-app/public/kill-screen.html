@@ -25,7 +25,7 @@ body{margin:0;color:var(--cream);overflow:hidden;
 .grid{display:grid;grid-template-columns:1fr 430px;gap:22px;height:100vh;padding:20px 22px}
 .left{display:flex;flex-direction:column;gap:14px;min-height:0}
 .head{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
-h1{font-size:46px;margin:0;color:#fff;text-shadow:4px 4px 0 rgba(0,0,0,.6),-1px -1px 0 rgba(0,0,0,.35)}
+.logo{height:64px;width:auto;display:block;filter:drop-shadow(0 5px 0 rgba(0,0,0,.45))}
 .hero{display:flex;align-items:center;gap:11px;color:var(--mut);font-size:16px}
 .hero img{width:54px;height:54px;border-radius:50%;object-fit:cover;border:4px solid var(--gold);
   box-shadow:0 3px 0 rgba(0,0,0,.45)}
@@ -66,7 +66,9 @@ button:disabled .btn{transform:none}
 .panel .n{font-family:Bangers,Impact,sans-serif;transform:skewX(-7deg);letter-spacing:.09em;
   font-size:13px;color:#6c6350;margin-bottom:3px}
 .panel .body{font-size:20px;line-height:1.35;font-weight:700}
-.join{font-size:17px;color:var(--mut)}.join b{color:#fff}
+.join{font-size:17px;color:var(--mut)}
+.join a{color:var(--gold);font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.join a:hover{color:#fff}
 
 .right{display:flex;flex-direction:column;gap:16px;min-height:0}
 .card{background:rgba(15,19,25,.45);border:4px solid rgba(246,239,220,.22);border-radius:6px;padding:16px 18px}
@@ -99,7 +101,7 @@ h2{font-family:Bangers,Impact,sans-serif;transform:skewX(-7deg);letter-spacing:.
 <div class=grid>
 <div class=left>
   <div class=head>
-    <h1 class=display>Kill or Save</h1>
+    <img class=logo src="assets/logo.png" alt="Dumbest Ways to Die">
     <span class=hero id=hero></span>
     <span class=roundlbl id=roundlbl></span>
     <span class=ctl>
@@ -109,7 +111,7 @@ h2{font-family:Bangers,Impact,sans-serif;transform:skewX(-7deg);letter-spacing:.
   </div>
   <div class=stage id=stage><div class=msg>starting up...</div></div>
   <div class=panel id=scene style="display:none"><div class=n>The story so far</div><div class=body id=scenetext></div></div>
-  <div class=join>Join on your phone: <b id=url>-</b> &nbsp;&middot;&nbsp; <span id=note></span></div>
+  <div class=join>Join on your phone: <a id=url href="kill.html" target="_blank" rel=noopener>-</a> &nbsp;&middot;&nbsp; <span id=note></span></div>
 </div>
 <div class=right>
   <div class="card grow"><h2 id=fhead>In the pot</h2>
@@ -126,7 +128,9 @@ h2{font-family:Bangers,Impact,sans-serif;transform:skewX(-7deg);letter-spacing:.
 <script>
 const $=s=>document.querySelector(s);
 const SESS=(new URLSearchParams(location.search).get('sess')||'main').toLowerCase().replace(/[^a-z0-9-]/g,'').slice(0,24)||'main';
-$('#url').textContent=location.host+'/kill.html'+(SESS==='main'?'':'?sess='+SESS);
+const JOINPATH='/kill.html'+(SESS==='main'?'':'?sess='+SESS);
+$('#url').textContent=location.host+JOINPATH;
+$('#url').href=JOINPATH;
 let st=null, busy=false, shown='';
 // Yoland reads his own lines. Autoplay is allowed because the host pressed Go on this page.
 let audio=new Audio(), playRound=null, playIdx=-1, playList=[];
@@ -182,8 +186,10 @@ function render(){
   $('#scene').style.display = so ? '' : 'none';
   $('#scenetext').textContent = so;
   $('#note').textContent = over ? 'Reset for a new game' : 'No timer - Go closes the pot and draws the page';
-  $('#teams').innerHTML = `<span>Team Kill <b>${st.players.kill}</b></span><span>Team Save <b>${st.players.save}</b></span>`
-    + `<span>Sides are secret; only the storyteller knows which answer is which</span>`;
+  // Only the head count. The per-team split was a leak: with the words on screen the room could
+  // start guessing which side an answer came from (Alex Tov, 2026-09-18).
+  const heads=st.players.kill+st.players.save;
+  $('#teams').innerHTML = `<span><b>${heads}</b> ${heads===1?'player':'players'} in the room</span>`;
   if(cur){
     $('#story').style.display='';
     $('#title').textContent='Round '+cur.round+': '+(cur.title||'');

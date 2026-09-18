@@ -592,7 +592,9 @@ def build_page(page_prompt, seed=42, aspect="16:9", previous_page=False, pro=Fal
                "inputs": {"prompt": page_prompt,
                           "model": "gemini-3-pro-image-preview" if pro else "Nano Banana 2 (Gemini 3.1 Flash Image)",
                           "seed": seed % 2147483647, "aspect_ratio": aspect, "resolution": "1K",
-                          "response_modalities": "IMAGE", "images": refs}}
+                          # IMAGE+TEXT so that a refusal comes back with the model's reason
+                          # instead of an opaque "did not generate an image" (seen live 2026-09-18).
+                          "response_modalities": "IMAGE+TEXT", "images": refs}}
     g["31"] = {"class_type": "SaveImage", "_meta": {"title": "the page"},
                "inputs": {"images": ["20", 0], "filename_prefix": "page"}}
     return g

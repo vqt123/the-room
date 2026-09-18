@@ -57,7 +57,13 @@ Rounds per game default to 2. Measured: Setup 5 s, Smash 40-55 s on Sonnet, page
 The phone and projector pages are styled after the team's comic mockups: dark speed-line paper,
 cream panels with heavy ink borders, gold bursts, and a secret team card. The card art and the
 hero photo are the team's own files and are **not** in this repo; drop your own into
-`vercel-app/public/assets/card-kill.jpg` and `card-save.jpg` to get the same cards.
+`vercel-app/public/assets/` as `card-kill.jpg`, `card-save.jpg`, `card-back.jpg` and `logo.png`
+to get the same cards. The role card starts face down and flips when the player taps it.
+
+If the image model refuses a page (it does, now and then, with a safety filter and no picture),
+the round is not lost: the server retries the same plan on the Pro model, then falls back to
+drawing the four panels on our own GPU, and only if both fail does it roll the round back so the
+host can press Go again with the same answers.
 
 ## The Room (the earlier modes)
 

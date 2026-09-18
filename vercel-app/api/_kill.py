@@ -376,6 +376,7 @@ def start(sess):
         rec = {"r": r, "job": job.id, "verdict": verdict, "render": render, "ms": int(time.time() * 1000),
                "tag": secrets.token_hex(3),
                "seed": seed, "scene": meta["scene"], "kill": pools["kill"], "save": pools["save"],
+               "look": look,
                "title": plan.get("title"), "story": plan.get("story"), "outcome": plan.get("outcome"),
                "layout": plan.get("layout"), "panels": panels, "page_prompt": plan.get("page_prompt"),
                "continuity": plan.get("continuity") or {}, "next_scene": plan.get("next_scene"),
@@ -394,6 +395,52 @@ def start(sess):
         _unlock(f"ks:{sess}:lock")
 
 
+def _submit_render(sess, rec, render, seed, pro=False):
+    """Send one render for a round that already has its plan. Used for the first attempt and
+    for the retries, so a refusal from the image model never costs the story."""
+    c = client()
+    hero = _hero_bytes(sess)
+    prev_done = [n for n in sorted(_load(sess)[2]) if n < rec["r"]]
+    use_prev = render != "panels" and bool(prev_done)
+    if render == "panels":
+        g = build_panels(_panel_prompts(rec.get("look") or HERO_LOOK, rec.get("continuity"), rec["panels"]),
+                         seed=seed, hero=bool(hero), look=rec.get("look") or HERO_LOOK)
+    else:
+        g = build_page(rec["page_prompt"] + PAGE_TAIL, seed=seed, previous_page=use_prev, pro=pro)
+    wf = c.workflows.from_json(g)
+    if hero and "2" in g:
+        wf.set_input("2", "image", c.assets.from_bytes(hero, filename="hero.png"))
+    if use_prev:
+        rounds = _load(sess)[2]
+        prev = _fetch(f"{_blob.base_url()}/{_path(sess, rounds[prev_done[-1]])}")
+        wf.set_input("4", "image", c.assets.from_bytes(prev, filename="prev.png"))
+    return c.submit(wf, api_key=_llm.partner_key())
+
+
+def _retry(sess, rec, why):
+    """The image model refuses now and then (a safety filter, a prompt it does not like). Try the
+    Pro model once, then fall back to drawing the four panels on our own GPU, and only give up
+    after that. A give-up rolls the round back so the host can simply press Go again."""
+    tries = int(rec.get("tries", 0)) + 1
+    rec["tries"] = tries
+    rec["last_error"] = str(why)[:200]
+    plan = {1: ("page", True), 2: ("panels", False)}.get(tries)
+    if plan and rec.get("panels"):
+        render, pro = plan
+        try:
+            job = _submit_render(sess, rec, render, random.randrange(1, 2 ** 31), pro=pro)
+        except Exception as e:  # noqa: BLE001
+            plan = None
+            rec["last_error"] = f"{rec['last_error']} | retry failed: {str(e)[:120]}"
+        else:
+            rec.update({"job": job.id, "render": render, "ms": int(time.time() * 1000)})
+            _kv.cmd("HSET", _k(sess), f"n:{rec['r']}", json.dumps(rec))
+            return {"state": "retry", "round": rec["r"], "try": tries, "render": render}
+    # Out of retries: drop the round so its answers are live again and Go re-runs it.
+    _kv.pipe([["HDEL", _k(sess), f"n:{rec['r']}"], ["HSET", _k(sess), "round", str(rec["r"])]])
+    return {"state": "error", "round": rec["r"], "error": rec["last_error"], "rolled_back": True}
+
+
 def publish(sess, round_no):
     """Once the endpoint is finished, copy the page (or the panels) into the blob store."""
     raw = _kv.cmd("HGET", _k(sess), f"n:{int(round_no)}")
@@ -404,19 +451,24 @@ def publish(sess, round_no):
         return {"state": "done" if rec.get("done_ms") else "error", "round": rec["r"]}
     got = poll(rec["job"])
     if got.get("state") == "error":
-        rec["error"] = str(got.get("error"))[:200]
-        _kv.cmd("HSET", _k(sess), f"n:{rec['r']}", json.dumps(rec))
-        return {"state": "error", "error": rec["error"]}
+        return _retry(sess, rec, got.get("error"))
     if got.get("state") != "done":
         return got
-    if rec.get("render") == "panels":
-        panels = story_panels(rec["job"])
-        for i, p in enumerate(panels, 1):
-            _blob.put(_path(sess, rec, i), _fetch(p["url"], 60), "image/png")
-        rec["images"] = len(panels)
-    else:
-        out = _output(client().jobs.get(rec["job"]), "31")
-        _blob.put(_path(sess, rec), _fetch(str(out.get_download_url().url), 60), "image/png")
+    try:
+        if rec.get("render") == "panels":
+            panels = story_panels(rec["job"])
+            if not panels:
+                raise RuntimeError("the job finished without any panels")
+            for i, p in enumerate(panels, 1):
+                _blob.put(_path(sess, rec, i), _fetch(p["url"], 60), "image/png")
+            rec["images"] = len(panels)
+        else:
+            out = _output(client().jobs.get(rec["job"]), "31")
+            if out is None:
+                raise RuntimeError("the job finished without a page")
+            _blob.put(_path(sess, rec), _fetch(str(out.get_download_url().url), 60), "image/png")
+    except Exception as e:  # noqa: BLE001
+        return _retry(sess, rec, e)
     # Yoland reads his own lines. The four calls run together, so this costs a couple of
     # seconds; a failure here must never cost the round, so the page still publishes.
     try:
