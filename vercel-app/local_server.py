@@ -49,9 +49,14 @@ class Dispatch(SimpleHTTPRequestHandler):
                 self.send_error(404)
                 return
             # Become the function's handler for this one request; it reads self.path,
-            # self.headers and self.rfile and writes with self.wfile like on Vercel.
+            # self.headers and self.rfile and writes with self.wfile like on Vercel. A
+            # keep-alive connection reuses this instance for its next request, so switch back.
+            own = self.__class__
             self.__class__ = cls
-            getattr(self, verb)()
+            try:
+                getattr(self, verb)()
+            finally:
+                self.__class__ = own
             return
         if verb != "do_GET":
             self.send_error(405)
