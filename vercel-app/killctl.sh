@@ -10,7 +10,7 @@
 set -e
 cd "$(dirname "$0")"
 APP="${APP:-https://steal-the-moves-tau.vercel.app}"
-PW=$(cat ../build/vercel_password.txt)
+PW=""   # Kill or Save takes no password
 PY=../build/.venv/bin/python
 post() { curl -s -X POST "$APP/api/kill" -H 'Content-Type: application/json' -d "$1"; echo; }
 case "$1" in

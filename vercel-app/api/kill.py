@@ -1,4 +1,5 @@
-"""Kill or Save's one endpoint. GET reads the shared state, POST changes it."""
+"""Kill or Save's one endpoint. GET reads the shared state, POST changes it. No password:
+the room is whoever has the link (Vinh, 2026-09-18: "remove the password requirement")."""
 import base64, json, os, sys
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
@@ -6,7 +7,7 @@ from urllib.parse import parse_qs, urlparse
 # Appended, not prepended: api/queue.py would otherwise shadow the standard
 # library's queue module for anything these handlers import.
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from _kill import advance, check_password, join, publish, reset, set_hero, start, state, word
+from _kill import advance, join, publish, reset, set_hero, start, state, word
 
 SESS_OK = set("abcdefghijklmnopqrstuvwxyz0123456789-")
 
@@ -29,8 +30,6 @@ class handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         q = parse_qs(urlparse(self.path).query)
-        if not check_password((q.get("password") or [""])[0]):
-            return self._json({"error": "wrong password"}, 401)
         try:
             self._json(state(_sess((q.get("sess") or [""])[0]), (q.get("voter") or [None])[0]))
         except Exception as e:  # noqa: BLE001
@@ -42,8 +41,6 @@ class handler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(length) or b"{}")
         except ValueError:
             return self._json({"error": "bad body"}, 400)
-        if not check_password(body.get("password")):
-            return self._json({"error": "wrong password"}, 401)
         sess = _sess(body.get("sess"))
         action = body.get("action")
         try:

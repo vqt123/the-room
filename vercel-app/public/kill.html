@@ -36,7 +36,7 @@ button:disabled{opacity:.4;cursor:default}
 <p class=sub>One character: <b id=heroname>Yoland</b>. Two secret teams. Drop single words into the shared pot. Everyone sees every word; nobody knows whose it is or which side it serves.</p>
 
 <div class=card id=joincard>
-  <div class=row><input type=text id=name placeholder="your name" maxlength=14><input type=password id=pw placeholder="password" style="max-width:150px"></div>
+  <div class=row><input type=text id=name placeholder="your name" maxlength=14></div>
   <div class=row style="margin-top:10px"><button id=join style="flex:1">Join and get a side</button></div>
   <div class=status id=joinst></div>
 </div>
@@ -58,8 +58,8 @@ const $=s=>document.querySelector(s);
 const SESS=(new URLSearchParams(location.search).get('sess')||'main').toLowerCase().replace(/[^a-z0-9-]/g,'').slice(0,24)||'main';
 let VOTER=localStorage.getItem('room_voter');
 if(!VOTER){VOTER=Math.random().toString(36).slice(2,12).replace(/[^a-z0-9]/g,'x');localStorage.setItem('room_voter',VOTER);}
-let PW=localStorage.getItem('stm_pw')||'', NAME=localStorage.getItem('room_name')||'';
-$('#pw').value=PW; $('#name').value=NAME;
+let PW='', NAME=localStorage.getItem('room_name')||'';
+$('#name').value=NAME;
 let st=null, joined=false, shownStrip='';
 
 async function api(body){
@@ -75,14 +75,14 @@ function esc(s){return (s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'
 
 function enter(){ joined=true; $('#joincard').style.display='none'; $('#game').style.display=''; tick(); }
 $('#join').onclick=async()=>{
-  NAME=$('#name').value.trim(); PW=$('#pw').value;
+  NAME=$('#name').value.trim();
   if(!NAME){$('#joinst').className='status err';$('#joinst').textContent='name?';return;}
-  localStorage.setItem('room_name',NAME); localStorage.setItem('stm_pw',PW);
+  localStorage.setItem('room_name',NAME);
   const g=await api({action:'join'});
   if(g.error){$('#joinst').className='status err';$('#joinst').textContent=g.error;return;}
   enter(); $('#text').focus();
 };
-for(const id of ['#name','#pw']) $(id).addEventListener('keydown',e=>{if(e.key==='Enter')$('#join').click();});
+$('#name').addEventListener('keydown',e=>{if(e.key==='Enter')$('#join').click();});
 $('#text').addEventListener('keydown',e=>{if(e.key==='Enter')$('#add').click();});
 $('#add').onclick=async()=>{
   const t=$('#text').value.trim(); if(!t) return;
@@ -133,5 +133,5 @@ async function tick(){
   }catch(e){}
 }
 setInterval(tick,2500);
-if(NAME && PW){ api({action:'join'}).then(g=>{ if(!g.error) enter(); }).catch(()=>{}); }
+if(NAME){ api({action:'join'}).then(g=>{ if(!g.error) enter(); }).catch(()=>{}); }
 </script>

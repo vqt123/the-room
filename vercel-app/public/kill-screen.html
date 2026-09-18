@@ -55,7 +55,7 @@ h2{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut)
 <script>
 const $=s=>document.querySelector(s);
 const SESS=(new URLSearchParams(location.search).get('sess')||'main').toLowerCase().replace(/[^a-z0-9-]/g,'').slice(0,24)||'main';
-let PW=localStorage.getItem('stm_pw')||''; if(!PW){PW=prompt('password')||''; localStorage.setItem('stm_pw',PW);}
+let PW='';
 $('#url').textContent=location.host+'/kill.html'+(SESS==='main'?'':'?sess='+SESS);
 let st=null, busy=false, shownStrip='', warmed=new Set();
 
