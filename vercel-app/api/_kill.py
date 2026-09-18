@@ -9,10 +9,13 @@ How a game runs (build/team_prompts.txt is the source; this is the engine it des
      fixed verdict, and returns the story, the panel plans, one page_prompt, the continuity
      and the hook into the next round, as JSON. Round 1 also carries the hero's photo and the
      writer names his look there; every later round picks up moments after the last page.
-  4. Render, one Comfy job on the endpoint: a Nano Banana API node draws the whole page from
+  4. Render, one Comfy job on the Dev Platform endpoint (the point of the hackathon, so this is
+     the default and stays the default): a Nano Banana API node draws the whole page from
      page_prompt with the hero's photo (and from round 2 the previous page) as references.
-     Fallback per session: the panel plans drawn as four separate pictures on the GPU, with the
-     lettering laid over them by the pages.
+     `fal` draws the same model through the Router in one synchronous call instead (18-19 s,
+     measured 2026-09-18); it is not the default, it is what the endpoint falls back to when the
+     provider refuses, because a refusal from Vertex is not a refusal from fal. Last resort
+     `panels`: the panel plans drawn as four separate pictures on our own GPU.
   5. The next scene goes up at once, so players type for the next round while the page draws.
 
 Verdict rule: every round LIVES except the final round, which DIES; the host can override the
@@ -31,10 +34,10 @@ plus `ks:<sess>:hero` (photo URL), `:rounds`, `:render` (page | pro | panels), `
 (override for the next round), all kept across resets, `:busy` (the stage marker every screen
 shows while a round is being made) and two short locks.
 """
-import json, os, random, re, secrets, sys, time
+import json, os, random, re, secrets, sys, threading, time
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import _blob, _kv, _llm, _voice
+import _blob, _fal, _kv, _llm, _voice
 from _core import check_password  # noqa: F401
 from _findcore import _output, client, poll, story_panels
 from _findgraph import COMIC_STYLE, HERO_DRAW, HERO_LOOK, HERO_NAME, build_page, build_panels
@@ -44,6 +47,7 @@ LOCK_MS = 120_000
 STUCK_MS = 240_000
 PAGE_MS = 25_000             # a Nano Banana page, for the countdown on screen
 PANELS_MS = 55_000
+FAL_MS = 20_000              # the same page drawn by fal, measured 18.4 s and 18.8 s on 2026-09-18
 WRITE_MS = 45_000            # the Smash call, for the bar on the phones while it runs
 VOICE_MS = 12_000            # the four speech calls at the end of a round
 BUSY_MS = 300_000            # the stage marker's own expiry, so a crashed Go never sticks
@@ -56,7 +60,7 @@ PAGE_TAIL = (" Dynamic manga-style comic page in wide landscape: exactly four pa
 TEAMS = ("kill", "save")
 NAME_RE = re.compile(r"^[a-z0-9]{6,12}$")
 WORD_RE = re.compile(r"[^a-z0-9' \-]+")
-RENDERS = ("page", "pro", "panels")
+RENDERS = ("pro", "page", "fal", "panels")
 
 
 def _k(sess):
@@ -315,7 +319,8 @@ def state(sess, voter=None):
         else:
             row["state"] = "drawing"
             row["stage"] = "drawing"
-            row["eta_ms"] = max(0, rec["ms"] + (PANELS_MS if rec.get("render") == "panels" else PAGE_MS) - now)
+            row["eta_ms"] = max(0, rec["ms"] + {"panels": PANELS_MS, "fal": FAL_MS}.get(
+                rec.get("render"), PAGE_MS) - now)
             if now - rec["ms"] < STUCK_MS:
                 drawing = row
         pages.append(row)
@@ -408,20 +413,25 @@ def start(sess):
             raise RuntimeError("the smash came back without panels or a page prompt: " + plan.get("raw", "")[:200])
         panels = panels[:4]
         seed = random.randrange(1, 2 ** 31)
-        c = client()
-        if render == "panels":
-            g = build_panels(_panel_prompts(look, meta["cont"], panels), seed=seed, hero=bool(hero), look=look)
+        # fal draws the page in one synchronous call, so there is no job to submit here: the
+        # picture is fetched in publish(), where the endpoint's job would have been polled.
+        if render == "fal":
+            job_id = ""
         else:
-            g = build_page(plan["page_prompt"] + PAGE_TAIL, seed=seed, previous_page=use_prev,
-                           pro=(render == "pro"))
-        wf = c.workflows.from_json(g)
-        if hero and "2" in g:
-            wf.set_input("2", "image", c.assets.from_bytes(hero, filename="hero.png"))
-        if use_prev:
-            prev = _fetch(f"{_blob.base_url()}/{_path(sess, rounds[prev_done[-1]])}")
-            wf.set_input("4", "image", c.assets.from_bytes(prev, filename="prev.png"))
-        job = c.submit(wf, api_key=_llm.partner_key())
-        rec = {"r": r, "job": job.id, "verdict": verdict, "render": render, "ms": int(time.time() * 1000),
+            c = client()
+            if render == "panels":
+                g = build_panels(_panel_prompts(look, meta["cont"], panels), seed=seed, hero=bool(hero), look=look)
+            else:
+                g = build_page(plan["page_prompt"] + PAGE_TAIL, seed=seed, previous_page=use_prev,
+                               pro=(render == "pro"))
+            wf = c.workflows.from_json(g)
+            if hero and "2" in g:
+                wf.set_input("2", "image", c.assets.from_bytes(hero, filename="hero.png"))
+            if use_prev:
+                prev = _fetch(f"{_blob.base_url()}/{_path(sess, rounds[prev_done[-1]])}")
+                wf.set_input("4", "image", c.assets.from_bytes(prev, filename="prev.png"))
+            job_id = c.submit(wf, api_key=_llm.partner_key()).id
+        rec = {"r": r, "job": job_id, "verdict": verdict, "render": render, "ms": int(time.time() * 1000),
                "tag": secrets.token_hex(3),
                "seed": seed, "scene": meta["scene"], "kill": pools["kill"], "save": pools["save"],
                "look": look,
@@ -437,7 +447,8 @@ def start(sess):
                 ["DEL", f"ks:{sess}:verdict"],
                 ["EXPIRE", _k(sess), TTL_S]]
         _kv.pipe(cmds)
-        return {"round": r, "job": job.id, "verdict": verdict, "title": rec["title"], "panels": len(panels),
+        _voice_async(sess, rec)
+        return {"round": r, "job": job_id, "verdict": verdict, "title": rec["title"], "panels": len(panels),
                 "render": render, "next_scene": rec["next_scene"]}
     finally:
         # The record now carries the round, or the Smash failed and nothing should still say
@@ -468,6 +479,25 @@ def _submit_render(sess, rec, render, seed, pro=False):
     return c.submit(wf, api_key=_llm.partner_key())
 
 
+def _fal_refs(sess, rec):
+    """The hero photo first, then the previous page, as public URLs. fal takes URLs, so nothing
+    is uploaded: the blob store already serves both."""
+    refs = [get_hero(sess)]
+    rounds = _load(sess)[2]
+    prev = [n for n in sorted(rounds) if n < rec["r"] and rounds[n].get("done_ms")
+            and rounds[n].get("render") != "panels"]
+    if prev:
+        refs.append(f"{_blob.base_url()}/{_path(sess, rounds[prev[-1]])}")
+    return [x for x in refs if x]
+
+
+def _fal_page(sess, rec, model=None):
+    """Draw the page at fal and store it, in place of submitting and polling a job."""
+    url = _fal.draw(rec["page_prompt"] + PAGE_TAIL, _fal_refs(sess, rec),
+                    model=model or _fal.PRO)
+    _blob.put(_path(sess, rec), _fetch(url, 60), "image/png")
+
+
 def _retry(sess, rec, why):
     """The image model refuses now and then (a safety filter, a prompt it does not like). Try the
     Pro model once, then fall back to drawing the four panels on our own GPU, and only give up
@@ -475,12 +505,22 @@ def _retry(sess, rec, why):
     tries = int(rec.get("tries", 0)) + 1
     rec["tries"] = tries
     rec["last_error"] = str(why)[:200]
-    # Retry ladder: the other Nano Banana, then our own GPU.
-    plan = {1: ("page" if rec.get("render") == "pro" else "pro", rec.get("render") != "pro"),
-            2: ("panels", False)}.get(tries)
+    # Retry ladder. A refusal is provider-shaped, so the first step changes provider rather than
+    # model: fal falls to the endpoint's Nano Banana and the endpoint falls to fal. Only after
+    # both providers have said no does it come back to our own GPU.
+    if rec.get("render") == "fal":
+        plan = {1: ("pro", True), 2: ("panels", False)}.get(tries)
+    else:
+        plan = {1: ("fal", False), 2: ("panels", False)}.get(tries)
     if plan and rec.get("panels"):
         render, pro = plan
         try:
+            if render == "fal":
+                # Nothing to submit: flip the record to fal and let the next publish draw it,
+                # so the picture is fetched exactly once however many times this is polled.
+                rec.update({"render": "fal", "job": "", "ms": int(time.time() * 1000)})
+                _kv.cmd("HSET", _k(sess), f"n:{rec['r']}", json.dumps(rec))
+                return {"state": "retry", "round": rec["r"], "try": tries, "render": render}
             job = _submit_render(sess, rec, render, random.randrange(1, 2 ** 31), pro=pro)
         except Exception as e:  # noqa: BLE001
             plan = None
@@ -494,21 +534,89 @@ def _retry(sess, rec, why):
     return {"state": "error", "round": rec["r"], "error": rec["last_error"], "rolled_back": True}
 
 
+def _au(rec):
+    """The field the speech thread writes to: per round AND per attempt, because a retry
+    redraws under a new tag and the old attempt's clips are gone with it."""
+    return f"au:{rec['r']}:{rec.get('tag') or '0'}"
+
+
+def _voice_async(sess, rec):
+    """Yoland's four lines are written the moment the Smash returns, and they do not depend on
+    the picture, so the speech is made while the page is being drawn instead of after it. The
+    result lands in its own field, because publish() owns the round record and this does not."""
+    def run():
+        try:
+            got = _speak(sess, rec, mark=False)
+        except Exception as e:  # noqa: BLE001
+            got = {"audio": 0, "voice_error": str(e)[:160]}
+        try:
+            _kv.cmd("HSET", _k(sess), _au(rec), json.dumps(got))
+        except Exception:  # noqa: BLE001
+            pass
+    t = threading.Thread(target=run, name=f"voice-{sess}-{rec['r']}", daemon=True)
+    t.start()
+    return t
+
+
+def _voice_result(sess, rec, wait_s=30):
+    """What the speech thread produced, waiting for it if the picture won the race."""
+    deadline = time.time() + wait_s
+    while True:
+        raw = _kv.cmd("HGET", _k(sess), _au(rec))
+        if raw:
+            try:
+                return json.loads(raw)
+            except Exception:  # noqa: BLE001
+                return None
+        if time.time() >= deadline:
+            return None
+        time.sleep(0.5)
+
+
+def _speak(sess, rec, mark=True):
+    """Yoland reads his four lines. The four calls run together, so this costs a few seconds; a
+    failure here must never cost the round, so it returns a result instead of raising."""
+    if mark:
+        set_busy(sess, rec["r"], "voicing")
+    try:
+        lines = [str(p.get("text") or p.get("caption") or "") for p in (rec.get("panels") or [])]
+        clips = _voice.say_all(lines, get_voice(sess)) if any(lines) else []
+        n = 0
+        for i, mp3 in enumerate(clips, 1):
+            if not mp3:
+                break
+            _blob.put(_voice_path(sess, rec, i), mp3, "audio/mpeg")
+            n = i
+        return {"audio": n}
+    except Exception as e:  # noqa: BLE001
+        return {"audio": 0, "voice_error": str(e)[:160]}
+
+
 def publish(sess, round_no):
-    """Once the endpoint is finished, copy the page (or the panels) into the blob store."""
+    """Draw the page (fal) or collect it from the finished job (the endpoint), store it in the
+    blob store, then have Yoland read his four lines."""
     raw = _kv.cmd("HGET", _k(sess), f"n:{int(round_no)}")
     if not raw:
         return {"state": "error", "error": "no such round"}
     rec = json.loads(raw)
     if rec.get("done_ms") or rec.get("error"):
         return {"state": "done" if rec.get("done_ms") else "error", "round": rec["r"]}
-    got = poll(rec["job"])
-    if got.get("state") == "error":
-        return _retry(sess, rec, got.get("error"))
-    if got.get("state") != "done":
-        return got
+    if rec.get("render") == "fal":
+        # One synchronous call: no queue, no polling, and the picture comes back as a URL.
+        try:
+            _fal_page(sess, rec)
+        except Exception as e:  # noqa: BLE001
+            return _retry(sess, rec, e)
+    else:
+        got = poll(rec["job"])
+        if got.get("state") == "error":
+            return _retry(sess, rec, got.get("error"))
+        if got.get("state") != "done":
+            return got
     try:
-        if rec.get("render") == "panels":
+        if rec.get("render") == "fal":
+            pass                      # already stored above
+        elif rec.get("render") == "panels":
             panels = story_panels(rec["job"])
             if not panels:
                 raise RuntimeError("the job finished without any panels")
@@ -522,22 +630,8 @@ def publish(sess, round_no):
             _blob.put(_path(sess, rec), _fetch(str(out.get_download_url().url), 60), "image/png")
     except Exception as e:  # noqa: BLE001
         return _retry(sess, rec, e)
-    # Yoland reads his own lines. The four calls run together, so this costs a couple of
-    # seconds; a failure here must never cost the round, so the page still publishes.
-    set_busy(sess, rec["r"], "voicing")
-    try:
-        lines = [str(p.get("text") or p.get("caption") or "") for p in (rec.get("panels") or [])]
-        clips = _voice.say_all(lines, get_voice(sess)) if any(lines) else []
-        n = 0
-        for i, mp3 in enumerate(clips, 1):
-            if not mp3:
-                break
-            _blob.put(_voice_path(sess, rec, i), mp3, "audio/mpeg")
-            n = i
-        rec["audio"] = n
-    except Exception as e:  # noqa: BLE001
-        rec["audio"] = 0
-        rec["voice_error"] = str(e)[:160]
+    got = _voice_result(sess, rec)
+    rec.update(got if got is not None else _speak(sess, rec))
     rec["done_ms"] = int(time.time() * 1000)
     _kv.pipe([["HSET", _k(sess), f"n:{rec['r']}", json.dumps(rec)], ["EXPIRE", _k(sess), TTL_S]])
     clear_busy(sess)
@@ -549,7 +643,7 @@ def advance(sess):
     live = [p for p in st["pages"] if p["state"] == "drawing"]
     if not live:
         return {"did": []}
-    if _kv.cmd("SET", f"ks:{sess}:publock", "held", "NX", "PX", 30_000) is None:
+    if _kv.cmd("SET", f"ks:{sess}:publock", "held", "NX", "PX", 120_000) is None:
         return {"did": [], "skipped": "another publisher is on it"}
     try:
         return {"did": [{"round": p["round"], **publish(sess, p["round"])} for p in live]}

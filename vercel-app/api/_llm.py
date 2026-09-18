@@ -1,7 +1,10 @@
-"""The text LLM, reached through Comfy's Router: api.comfy.org proxies Anthropic's Messages API
-at /proxy/anthropic/v1/messages and bills the production Comfy key. The same route the
-ClaudeNode inside ComfyUI uses; here it is called from the game engine, so the reply is a
-JSON document instead of a file name.
+"""The text LLM, reached through Comfy's Router on its v2 model surface:
+
+    POST /v2/models/anthropic/<model>      the Anthropic Messages body, model named by the path
+
+This is the same catalogue the picture is drawn from (docs.comfy.org/development/comfy-router/
+models), so every call the game makes goes through one Router surface and one production key,
+rather than the older /proxy/anthropic/v1/messages passthrough (Vinh, 2026-09-18).
 
 The team's two prompts (build/team_prompts.txt, from Team 6's artifact) live in
 prompts/setup.txt and prompts/smash.txt, plus a PANEL FLOW section added to the Smash on
@@ -10,7 +13,8 @@ tails they end with are rendered here.
 """
 import base64, json, os, re, urllib.request
 
-ROUTER = "https://api.comfy.org/proxy/anthropic/v1/messages"
+ROUTER = "https://api.comfy.org/v2/models/anthropic"        # + "/<model>"
+LEGACY_ROUTER = "https://api.comfy.org/proxy/anthropic/v1/messages"
 MODEL_FAST = "claude-haiku-4-5-20251001"
 MODEL_FUNNY = "claude-sonnet-5"
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -28,9 +32,10 @@ def prompt_file(name):
 
 
 def claude(system, user_text, image_bytes=None, image_type="image/png", model=MODEL_FUNNY, max_tokens=4000,
-           timeout=90):
+           timeout=90, _retried=False):
     """One Messages call. Returns the reply text. Falls back to the fast model when the
-    Router does not know the requested one."""
+    Router does not know the requested one, and asks again when a reply comes back with no text
+    at all (seen live 2026-09-18: the whole budget went on a thinking block and the round died)."""
     key = partner_key()
     if not key:
         raise RuntimeError("server is missing COMFY_PARTNER_API_KEY (the Router needs a production key)")
@@ -39,9 +44,10 @@ def claude(system, user_text, image_bytes=None, image_type="image/png", model=MO
         content.append({"type": "image", "source": {"type": "base64", "media_type": image_type,
                                                     "data": base64.b64encode(image_bytes).decode()}})
     content.append({"type": "text", "text": user_text})
-    body = {"model": model, "max_tokens": max_tokens, "system": system,
+    # v2 names the model in the path; the body is the Messages body otherwise unchanged.
+    body = {"max_tokens": max_tokens, "system": system,
             "messages": [{"role": "user", "content": content}]}
-    req = urllib.request.Request(ROUTER, data=json.dumps(body).encode(), method="POST", headers={
+    req = urllib.request.Request(f"{ROUTER}/{model}", data=json.dumps(body).encode(), method="POST", headers={
         "Content-Type": "application/json", "X-API-KEY": key, "Authorization": f"Bearer {key}"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -54,22 +60,63 @@ def claude(system, user_text, image_bytes=None, image_type="image/png", model=MO
     parts = out.get("content") or []
     text = "".join(p.get("text", "") for p in parts if p.get("type") == "text")
     if not text:
-        raise RuntimeError(f"router returned no text: {json.dumps(out)[:200]}")
+        kinds = ",".join(sorted({p.get("type", "?") for p in parts})) or "none"
+        why = f"stop_reason={out.get('stop_reason')} blocks={kinds}"
+        if not _retried:
+            return claude(system, user_text, image_bytes, image_type, model, max_tokens, timeout, True)
+        raise RuntimeError(f"router returned no text ({why})")
     return text
 
 
+def _repair(t):
+    """A long JSON reply comes back malformed now and then: a real newline left inside a string,
+    a trailing comma, curly quotes. Measured 2026-09-18: three of four Smash calls failed to
+    parse, and every one of them was one of these. Walk the text and fix them rather than lose
+    the round."""
+    out, in_str, esc = [], False, False
+    for ch in t:
+        if esc:
+            out.append(ch)
+            esc = False
+            continue
+        if ch == "\\":
+            out.append(ch)
+            esc = in_str          # a backslash only escapes inside a string
+            continue
+        if ch == '"':
+            in_str = not in_str
+            out.append(ch)
+            continue
+        if in_str and ch in "\n\r\t":
+            out.append({"\n": "\\n", "\r": "\\r", "\t": "\\t"}[ch])
+            continue
+        out.append(ch)
+    t = "".join(out)
+    if in_str:                     # the reply stopped mid-string: close it and the document
+        t += '"'
+    t = re.sub(r",(\s*[}\]])", r"\1", t)        # trailing commas
+    opens = t.count("{") - t.count("}")
+    if opens > 0:
+        t += "}" * opens
+    return t
+
+
 def parse_json(text):
-    """The prompts ask for bare JSON; strip fences or stray prose if the model adds them."""
+    """The prompts ask for bare JSON; strip fences or stray prose if the model adds them, then
+    repair the reply rather than throw away a round over a stray newline."""
     t = text.strip()
     t = re.sub(r"^```(?:json)?\s*", "", t)
     t = re.sub(r"\s*```$", "", t)
-    try:
-        return json.loads(t)
-    except json.JSONDecodeError:
-        a, b = t.find("{"), t.rfind("}")
-        if a >= 0 and b > a:
-            return json.loads(t[a:b + 1])
-        raise
+    a, b = t.find("{"), t.rfind("}")
+    for candidate in (t, t[a:b + 1] if (a >= 0 and b > a) else None, _repair(t),
+                      _repair(t[a:]) if a >= 0 else None):
+        if not candidate:
+            continue
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+    raise ValueError("the writer's reply is not JSON, even after repair: " + t[:300])
 
 
 # ---- the one call per round ----------------------------------------------------------------
@@ -153,7 +200,26 @@ def smash(hero_name, round_number, total_rounds, verdict, hero_description, curr
                   f"\"Panel 1\", and use plain words a voice can say: no emoji, no asterisks, no stage directions "
                   f"in brackets. He can react, complain and joke about what is happening to him. The four \"text\" "
                   f"fields read in order must tell the whole story on their own.",
-                  "- \"story\" and \"outcome\" stay in the third person, for the record; only \"text\" is his voice."]
+                  "- \"story\" and \"outcome\" stay in the third person, for the record; only \"text\" is his voice.",
+                  "", "LENGTH (this decides how long the room waits, so it is not negotiable):",
+                  "- The size of the pot NEVER changes the size of the page. Thirty answers and three answers "
+                  "both produce exactly four panels, the same length of narration and the same page prompt. Extra "
+                  "answers get folded into the same four beats, several to a panel, or left out; they never buy "
+                  "more panels, more sentences or a longer prompt.",
+                  "- Use as many of the answers as the story can carry. Crowding four or five of them into one "
+                  "panel is good; stretching the page to fit them all is not.",
+                  "- Work in as many of the answers as you can, aiming for at least two thirds of each pool, "
+                  "by crowding several into one panel rather than by adding panels or sentences.",
+                  "- Hard sizes, counted: \"story\" max 45 words. \"outcome\" max 25 words. Each panel's "
+                  "\"visual\" max 20 words (it is only a backup; the page prompt is what gets drawn). Each "
+                  "panel's \"text\" max 30 words.",
+                  "- \"page_prompt\" is the one field that must stay complete: it is the only thing the "
+                  "image model ever sees, so it always describes the layout once and then all four panels, "
+                  "and it always ends with the art style. Aim for about 250 words by giving each panel one "
+                  "tight sentence, never by leaving a panel out or by shortening it to a stub.",
+                  "- Write \"bubbles\": [] for every panel. Nothing is lettered on the page and nothing reads "
+                  "them, so any bubble text is pure delay.",
+                  "- No commentary, no explanation, no notes about what you used or skipped: the JSON only."]
     if previous_rounds:
         lines += ["", "THIS IS A CONTINUATION, NOT A NEW STORY:",
                   "- This page picks up moments after the last panel of the previous page, in the same world and "
@@ -166,8 +232,26 @@ def smash(hero_name, round_number, total_rounds, verdict, hero_description, curr
                   "keep a mark of it on him for the rest of the page."]
     if photo is not None:
         lines += ["", "HERO:", HERO_RULES]
-    text = claude(prompt_file("smash.txt") + "\n" + "\n".join(lines), "Go.", photo, photo_type,
-                  max_tokens=6000, timeout=150)
-    got = parse_json(text)
+    def check(got):
+        """A round is only usable if the writer sent the four panels AND a real page prompt.
+        Measured 2026-09-18: pushed on length, it sometimes returns page_prompt as a 14-character
+        stub, which draws a garbage page rather than failing loudly."""
+        if len(got.get("panels") or []) < panels_exactly:
+            raise ValueError(f"only {len(got.get('panels') or [])} panels came back")
+        if len(str(got.get("page_prompt") or "").strip()) < 200:
+            raise ValueError("page_prompt came back as a stub: " + repr(got.get("page_prompt"))[:120])
+        return got
+
+    system = prompt_file("smash.txt") + "\n" + "\n".join(lines)
+    text = claude(system, "Go.", photo, photo_type, max_tokens=12000, timeout=180)
+    try:
+        got = check(parse_json(text))
+    except ValueError:
+        # One more go, saying what went wrong. A round is worth 40 seconds; losing it is not.
+        text = claude(system, "Your last reply was unusable. Send the whole page again as ONE valid JSON "
+                              "object: no prose, no markdown fence, no real line breaks inside strings, all "
+                              f"{panels_exactly} panels, and \"page_prompt\" written out in full.",
+                      photo, photo_type, max_tokens=12000, timeout=180)
+        got = check(parse_json(text))
     got["raw"] = text
     return got

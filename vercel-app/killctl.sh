@@ -8,7 +8,7 @@
 #   ./killctl.sh voice sample.mp3 [sess]       clone Yoland's voice from audio; or pass a voice id
 #   ./killctl.sh go [sess]                     press Go: smash, then render
 #   ./killctl.sh advance [sess]                publish a finished page
-#   ./killctl.sh config ROUNDS RENDER VERDICT [sess]   e.g. config 2 '"page"' null  (RENDER: "page"|"pro"|"panels"; VERDICT: "lives"|"dies"|null)
+#   ./killctl.sh config ROUNDS RENDER VERDICT [sess]   e.g. config 2 '"page"' null  (RENDER: "fal"|"pro"|"page"|"panels"; VERDICT: "lives"|"dies"|null)
 set -e
 cd "$(dirname "$0")"
 APP="${APP:-http://127.0.0.1:8791}"

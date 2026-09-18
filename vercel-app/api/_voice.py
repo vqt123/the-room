@@ -13,9 +13,12 @@ import json, mimetypes, os, secrets, sys, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from _llm import ROUTER, partner_key
+from _llm import partner_key
 
-BASE = ROUTER.rsplit("/proxy/", 1)[0] + "/proxy/elevenlabs/v1"
+# The voice stays on the passthrough: v2 lists ElevenLabs' sound-effect and v3 models, but not
+# text-to-speech against a cloned voice id, and not /voices/add at all. Absolute, so it does not
+# move when the LLM's base does.
+BASE = "https://api.comfy.org/proxy/elevenlabs/v1"
 STOCK_VOICE = "nPczCjzI2devNBz1zQrb"      # Brian, male american: the placeholder until Yoland is cloned
 TTS_MODEL = "eleven_multilingual_v2"
 MAX_CHARS = 380
