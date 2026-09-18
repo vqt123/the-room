@@ -1,0 +1,163 @@
+<!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>Find It</title>
+<style>
+:root{--bg:#0b0d12;--card:#161922;--ink:#eceff5;--mut:#8f97a6;--acc:#ffd23c;--ok:#5ddc97;--bad:#ff6b6b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 16px}
+h1{font-size:40px;margin:0 0 2px;letter-spacing:.02em}
+.sub{color:var(--mut);margin:0 0 20px}
+.grid{display:grid;grid-template-columns:330px 1fr;gap:20px}@media(max-width:900px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border-radius:14px;padding:18px}
+label{display:block;font-weight:600;margin:14px 0 6px}label:first-child{margin-top:0}
+input[type=text],input[type=password],select{width:100%;padding:10px 12px;border-radius:8px;border:1px solid #2a2f3a;background:#0b0d12;color:var(--ink);font-size:15px}
+button{margin-top:16px;width:100%;padding:14px;border:0;border-radius:10px;background:var(--acc);color:#1a1400;font-size:17px;font-weight:800;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+.ghost{background:#2a2f3a;color:var(--ink);font-weight:600;font-size:15px;padding:10px}
+.small{font-size:13px;color:var(--mut)}
+.drop{border:2px dashed #2a2f3a;border-radius:10px;padding:14px;text-align:center;color:var(--mut);cursor:pointer;margin-top:6px}
+.drop.has{border-color:var(--acc);color:var(--ink)}.drop img{max-height:90px;border-radius:6px;display:block;margin:0 auto 6px}
+.status{margin-top:12px;min-height:22px}.status.err{color:var(--bad)}.status.ok{color:var(--ok)}
+.stage{position:relative;line-height:0;border-radius:12px;overflow:hidden;background:#000}
+.stage img{width:100%;cursor:crosshair;display:block}
+.mark{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;border:3px solid var(--bad);pointer-events:none;animation:pop .3s ease-out}
+.mark.win{border-color:var(--ok);width:76px;height:76px;margin:-38px 0 0 -38px}
+@keyframes pop{from{transform:scale(1.6);opacity:0}to{transform:scale(1);opacity:1}}
+.hud{display:flex;gap:14px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.pill{background:#222736;border-radius:999px;padding:5px 12px;font-size:14px}
+.pill b{color:var(--acc)}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--mut);border-top-color:var(--ink);border-radius:50%;animation:s .8s linear infinite;vertical-align:-2px;margin-right:8px}
+@keyframes s{to{transform:rotate(360deg)}}
+a{color:var(--acc)}.foot{margin-top:24px;color:var(--mut);font-size:13px}
+.row{display:flex;gap:8px}.row>*{flex:1}
+</style>
+<div class=wrap>
+<h1>Find It</h1>
+<p class=sub>Name a thing. It gets drawn, hidden somewhere in a crowded picture, and you have to tap it.</p>
+<div class=grid>
+<form class=card id=f>
+<label>What should we hide?</label>
+<input type=text id=thing placeholder="a red soda can" value="a red soda can">
+<div class=small style="margin-top:6px">or <a href=# id=usephoto>upload a photo of a thing</a> instead</div>
+<div id=photowrap style="display:none"><div class=drop id=drop><span>Drop a product photo</span></div><div class=small style="margin-top:6px">A photo on a plain background cuts out cleanly. A busy background gets pasted in as a square.</div><input type=file id=file accept="image/*" hidden></div>
+<label>Where</label>
+<select id=scene>
+<option value="">surprise me</option>
+<option value=carnival>seaside carnival</option>
+<option value=attic>cluttered attic</option>
+<option value=market>street market</option>
+<option value="sports day">school sports day</option>
+<option value="toy shop">toy shop</option>
+<option value=pool>swimming pool</option>
+</select>
+<label>How mean</label>
+<select id=difficulty><option value=1>1 - obvious</option><option value=2>2 - easy</option><option value=3 selected>3 - fair</option><option value=4>4 - hard</option><option value=5>5 - cruel</option></select>
+<label>Password</label><input type=password id=pw>
+<button id=go>Hide it</button>
+<div class=status id=st></div>
+</form>
+<div class=card>
+<div class=hud id=hud style="display:none">
+<span class=pill style="display:flex;align-items:center;gap:8px">looking for <img id=hudpic alt="" style="height:34px;width:34px;object-fit:contain;background:#fff;border-radius:6px;display:none"> <b id=hudthing>-</b></span>
+<span class=pill>scene <b id=hudscene>-</b></span>
+<span class=pill><b id=timer>0.0</b>s</span>
+<span class=pill>taps <b id=taps>0</b></span>
+<button class="ghost" id=giveup style="width:auto;margin:0;padding:6px 14px">Show me</button>
+</div>
+<div class=stage id=stage><p class=small style="line-height:1.45;padding:14px">The picture and the thing are both drawn on a Comfy Dev Platform endpoint. A private node inside that endpoint does the hiding and keeps the coordinates, so your tap is scored on the server. About 25 seconds when the worker is warm.</p></div>
+<div class=status id=result></div>
+</div></div>
+<div class=card style="margin-top:16px" id=queue><b>Endpoint queue</b> <span class=small id=qtext>loading...</span><div class=small id=qjobs></div></div>
+<details class=card style="margin-top:16px" id=dbg><summary style="cursor:pointer"><b>Debug</b> <span class=small>build, release, deployment, endpoint health</span></summary><pre id=dbgpre class=small style="white-space:pre-wrap;word-break:break-all;margin:10px 0 0"></pre><p class=small><a href=# id=dbgrefresh>refresh</a></p></details>
+<p class=foot>Built on the Comfy Developer Platform. A public model can draw the picture and the thing, but it cannot say where it put anything, so it cannot score a click. The private node does the placing, which is why it owns the answer.</p>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+let photo=null,game=null,t0=0,timer=null,taps=0,done=false;
+try{$('#pw').value=localStorage.getItem('stm_pw')||''}catch(e){}
+$('#usephoto').onclick=e=>{e.preventDefault();const w=$('#photowrap');const on=w.style.display==='none';w.style.display=on?'block':'none';$('#thing').disabled=on;};
+$('#drop').onclick=()=>$('#file').click();
+$('#file').onchange=e=>setPhoto(e.target.files[0]);
+['dragover','dragenter'].forEach(ev=>$('#drop').addEventListener(ev,e=>e.preventDefault()));
+$('#drop').addEventListener('drop',e=>{e.preventDefault();setPhoto(e.dataTransfer.files[0]);});
+function setPhoto(f){if(!f)return;photo=f;const r=new FileReader();r.onload=()=>{$('#drop').classList.add('has');$('#drop').innerHTML=`<img src="${r.result}"><span>${f.name}</span>`;};r.readAsDataURL(f);}
+$('#f').onsubmit=async e=>{
+  e.preventDefault();
+  try{localStorage.setItem('stm_pw',$('#pw').value)}catch(err){}
+  const fd=new FormData();
+  fd.append('password',$('#pw').value);
+  fd.append('difficulty',$('#difficulty').value);
+  fd.append('scene',$('#scene').value);
+  if(photo&&$('#photowrap').style.display!=='none')fd.append('photo',photo);else fd.append('thing',$('#thing').value);
+  $('#go').disabled=true;$('#result').textContent='';$('#st').className='status';$('#st').innerHTML='<span class=spin></span>drawing...';
+  try{
+    const r=await fetch('/api/find',{method:'POST',body:fd});const j=await r.json();
+    if(j.error)throw new Error(j.error);
+    game=j;poll(j.id,Date.now());
+  }catch(err){$('#go').disabled=false;$('#st').className='status err';$('#st').textContent=String(err.message||err);}
+};
+async function poll(id,start){
+  try{
+    const r=await fetch('/api/findjob?id='+encodeURIComponent(id)+'&password='+encodeURIComponent($('#pw').value));
+    const j=await r.json();const secs=((Date.now()-start)/1000).toFixed(0);
+    if(j.state==='done'){$('#go').disabled=false;$('#st').className='status ok';$('#st').textContent='hidden. now find it.';show(j.image_url,j.thing_url);return;}
+    if(j.state==='error'){$('#go').disabled=false;$('#st').className='status err';$('#st').textContent=j.error;return;}
+    $('#st').innerHTML=`<span class=spin></span>${j.status||'working'} · ${secs}s`;
+    setTimeout(()=>poll(id,start),2500);
+  }catch(err){setTimeout(()=>poll(id,start),3500);}
+}
+function show(url,thingUrl){
+  done=false;taps=0;$('#taps').textContent='0';
+  $('#hud').style.display='flex';
+  $('#hudthing').textContent=game.thing||'your photo';$('#hudscene').textContent=game.scene;
+  const hp=$('#hudpic');
+  if(thingUrl){hp.src=thingUrl;hp.style.display='block';}else{hp.style.display='none';}
+  $('#stage').innerHTML=`<img id=pic src="${url}" alt="a crowded picture with one thing hidden in it">`;
+  $('#pic').onclick=tap;
+  t0=Date.now();clearInterval(timer);timer=setInterval(()=>{if(!done)$('#timer').textContent=((Date.now()-t0)/1000).toFixed(1);},100);
+}
+async function tap(e){
+  if(done)return;
+  const img=$('#pic'),r=img.getBoundingClientRect();
+  const x=Math.round((e.clientX-r.left)/r.width*1000),y=Math.round((e.clientY-r.top)/r.height*1000);
+  taps++;$('#taps').textContent=taps;
+  mark(e.clientX-r.left,e.clientY-r.top,false);
+  try{
+    const res=await fetch(`/api/tap?id=${encodeURIComponent(game.id)}&x=${x}&y=${y}&password=`+encodeURIComponent($('#pw').value));
+    const j=await res.json();
+    if(j.error){$('#result').className='status err';$('#result').textContent=j.error;return;}
+    if(j.hit){win(j.box);}
+    else{$('#result').className='status';$('#result').textContent=`${j.hint}`;}
+  }catch(err){}
+}
+function mark(px,py,win){
+  const d=document.createElement('div');d.className='mark'+(win?' win':'');
+  d.style.left=px+'px';d.style.top=py+'px';$('#stage').appendChild(d);
+  if(!win)setTimeout(()=>d.remove(),1400);
+}
+function win(box){
+  done=true;clearInterval(timer);
+  const secs=((Date.now()-t0)/1000).toFixed(1);
+  const img=$('#pic'),r=img.getBoundingClientRect();
+  mark((box.x+box.w/2)/1000*r.width,(box.y+box.h/2)/1000*r.height,true);
+  $('#result').className='status ok';
+  $('#result').textContent=`found it in ${secs}s after ${taps} tap${taps===1?'':'s'}.`;
+}
+$('#giveup').onclick=async e=>{
+  e.preventDefault();if(!game||done)return;
+  const res=await fetch(`/api/tap?id=${encodeURIComponent(game.id)}&reveal=1&password=`+encodeURIComponent($('#pw').value));
+  const j=await res.json();
+  if(j.box){done=true;clearInterval(timer);const img=$('#pic'),r=img.getBoundingClientRect();
+    mark((j.box.x+j.box.w/2)/1000*r.width,(j.box.y+j.box.h/2)/1000*r.height,true);
+    $('#result').className='status';$('#result').textContent='there it was.';}
+};
+async function refreshQueue(){try{const r=await fetch('/api/queue?password='+encodeURIComponent($('#pw').value));const q=await r.json();
+if(q.error){$('#qtext').textContent=q.error;return;}
+$('#qtext').textContent=`${q.waiting} job${q.waiting===1?'':'s'} in the queue · worker ${q.running?'busy':(q.waiting?'waking up':'idle')}`;
+$('#qjobs').innerHTML=(q.jobs||[]).map(j=>`<span style="display:inline-block;margin:6px 6px 0 0;padding:2px 8px;border-radius:6px;background:${j.started?'#2b3a2f':'#2a2f3a'}">${j.id} ${j.started?'running':'waiting'}</span>`).join('');
+}catch(e){$('#qtext').textContent='queue unavailable';}}
+setInterval(refreshQueue,5000);refreshQueue();
+async function refreshDebug(){try{const r=await fetch('/api/debug?password='+encodeURIComponent($('#pw').value));$('#dbgpre').textContent=JSON.stringify(await r.json(),null,2);}catch(e){$('#dbgpre').textContent='debug unavailable: '+e;}}
+$('#dbgrefresh').onclick=e=>{e.preventDefault();refreshDebug();};
+$('#dbg').addEventListener('toggle',()=>{if($('#dbg').open)refreshDebug();});
+</script>

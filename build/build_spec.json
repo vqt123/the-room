@@ -1,0 +1,48 @@
+{
+  "schema": "comfy-build/1",
+  "id": "463c3b3c-2a1b-4648-9651-8461392ec7ff",
+  "name": "steal-the-moves",
+  "description": "Hackathon 2026-09-18: YouTube URL + timestamp + profile picture -> that person doing the move. Private pack ytmove (compiled ytframe binary with bundled yt-dlp + ffmpeg) + Qwen-Image-Edit-2511.",
+  "syncedRevision": "2026-09-18T16:33:50.185239Z",
+  "definition": {
+    "schema": "comfy-build/1",
+    "baseComfyVersion": "v0.36.0",
+    "baseImage": "cuda130-py312",
+    "models": [
+      {
+        "filename": "qwen_image_edit_2511_fp8mixed.safetensors",
+        "sourceUri": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors",
+        "type": "diffusion_models"
+      },
+      {
+        "filename": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+        "sourceUri": "https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/resolve/main/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+        "type": "loras"
+      },
+      {
+        "filename": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+        "sourceUri": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",
+        "type": "text_encoders"
+      },
+      {
+        "filename": "qwen_image_vae.safetensors",
+        "sourceUri": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors",
+        "type": "vae"
+      }
+    ],
+    "customNodes": [
+      {
+        "blobId": "9bc8e86c-5a18-4622-8599-ece9708d98aa",
+        "gitRef": null,
+        "localDigest": "393ac5a587e579654155821d24434687ece659702358314a3ce60b3db533eeea",
+        "localPath": "ytmove_pack",
+        "localSizeBytes": 224650357,
+        "name": "ytmove",
+        "repository": null,
+        "source": "local"
+      }
+    ],
+    "pipDependencies": "",
+    "environment": {}
+  }
+}

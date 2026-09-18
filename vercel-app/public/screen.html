@@ -1,0 +1,201 @@
+<!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>The Room - screen</title>
+<style>
+:root{--bg:#0b0d12;--card:#161922;--ink:#eceff5;--mut:#8f97a6;--acc:#ffd23c;--ok:#5ddc97;--bad:#ff6b6b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;overflow:hidden}
+.grid{display:grid;grid-template-columns:1fr 420px;gap:22px;height:100vh;padding:22px}
+.card{background:var(--card);border-radius:18px;padding:20px;overflow:hidden}
+.left{display:flex;flex-direction:column;gap:14px;min-height:0}
+.head{display:flex;align-items:baseline;gap:18px;flex-wrap:wrap}
+h1{font-size:34px;margin:0;letter-spacing:.02em}
+.hunt{font-size:34px;font-weight:800;color:var(--acc)}
+.clock{font-size:34px;font-weight:800;font-variant-numeric:tabular-nums}
+.stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:#000;border-radius:18px;overflow:hidden;position:relative}
+.stage img{max-width:100%;max-height:100%;object-fit:contain;display:block}
+.stage .msg{color:var(--mut);font-size:22px;padding:30px;text-align:center}
+.bar{height:8px;background:#222736;border-radius:999px;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--acc);width:0;transition:width .4s linear}
+.q{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #222736;font-size:19px}
+.q:last-child{border-bottom:0}
+.q .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.q .n{font-size:13px;color:var(--mut)}
+.v{background:#2a2f3a;border-radius:999px;padding:5px 13px;font-weight:800;min-width:44px;text-align:center}
+.v.top{background:var(--acc);color:#1a1400}
+h2{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin:0 0 8px}
+.right{display:flex;flex-direction:column;gap:18px;min-height:0}
+.right .card{flex:1;min-height:0;overflow:auto}
+.join{font-size:17px;color:var(--mut)}
+.join b{color:var(--ink)}
+.ctl{margin-left:auto;display:flex;align-items:center;gap:14px}
+.ctl button{padding:12px 22px;border:0;border-radius:12px;background:var(--acc);color:#1a1400;
+  font-size:19px;font-weight:800;cursor:pointer}
+.ctl button:disabled{opacity:.4;cursor:default}
+.auto{font-size:15px;color:var(--mut);display:flex;align-items:center;gap:7px;cursor:pointer}
+.win{color:var(--ok);font-weight:800}
+.open{color:var(--mut)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+h3{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin:0 0 6px}
+.th{width:34px;height:34px;object-fit:contain;background:#fff;border-radius:6px;flex:0 0 auto}
+.marks i{position:absolute;width:64px;height:64px;margin:-32px 0 0 -32px;border:4px solid var(--ok);border-radius:50%;animation:pop .5s ease-out}
+@keyframes pop{from{transform:scale(1.8);opacity:0}to{transform:scale(1);opacity:1}}
+</style>
+<div class=grid>
+<div class=left>
+  <div class=head><h1>The Room</h1><span class=hunt id=hunt>-</span><span class=clock id=clock></span>
+    <span class=ctl><button id=go>Submit</button></span>
+  </div>
+  <div class=bar><i id=bar></i></div>
+  <div class=stage id=stage><div class=msg id=msg>starting up...</div></div>
+  <div class=join>Join on your phone: <b id=url>-</b> &nbsp;&middot;&nbsp; <span id=note>the top of the queue is drawn every 30 seconds</span></div>
+</div>
+<div class=right>
+  <div class=card><h2 id=thead>Hidden in this picture</h2><div id=tlist></div></div>
+  <div class=card style="flex:0 0 auto"><h2 id=qhead>Next round - add yours on your phone</h2>
+    <div id=qlist></div>
+    <div id=vnboard style="display:none">
+      <div class=cols><div><h3>Verbs</h3><div id=vlist></div></div><div><h3>Nouns</h3><div id=nlist></div></div></div>
+    </div>
+  </div>
+</div>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const SESS=new URLSearchParams(location.search).get('sess')||'main';
+let PW=new URLSearchParams(location.search).get('password')||localStorage.getItem('stm_pw')||'';
+if(!PW){PW=prompt('password')||'';localStorage.setItem('stm_pw',PW);}
+$('#url').textContent=location.host+'/room.html'+(SESS!=='main'?'?sess='+SESS:'');
+let st=null, busy=false, shown=null, warmed=null;
+// The Submit button is the ONLY thing that starts a round. The loop below only moves a
+// finished round along (publish, put it up); it never starts one.
+
+function nextUp(){
+  if(!st) return '';
+  if(st.mode==='vn'){
+    const v = st.verbs[0], n = st.nouns[0];
+    return (v||n) ? ((n?n.text:'something')+' '+(v?v.text:'')).trim() : 'the house picks';
+  }
+  const q = st.queue || [];
+  return q.length ? q.slice(0,3).map(x=>x.text).join(', ') + (q.length>3?'...':'') : 'the house picks';
+}
+
+function paint(){
+  const drawing = st && st.drawing.length > 0;
+  const empty = st && st.mode==='pairs' && !st.queue.length;
+  $('#go').disabled = !st || drawing || empty;
+  $('#go').textContent = drawing ? 'drawing...' : empty ? 'Submit (nothing yet)' : 'Submit: ' + nextUp();
+}
+
+$('#go').onclick = async () => {
+  $('#go').disabled = true;
+  $('#go').textContent = 'sending...';
+  try{
+    const g = await api({action:'start'});
+    if(g.error){ $('#note').textContent = 'could not start: ' + g.error; }
+    else if(g.skipped){ $('#note').textContent = g.skipped==='not yet' ? 'a picture is already drawn and waiting to go up' : g.skipped; }
+  }catch(e){ $('#note').textContent = 'could not start: ' + e.message; }
+  await conduct();
+};
+
+// The next picture is already drawn and in the CDN while the room is still looking at this
+// one. Fetching it now means the flip costs nothing but a src change.
+function warm(url){
+  if(!url || warmed===url) return;
+  warmed=url; const im=new Image(); im.decoding='async'; im.src=url;
+  if(im.decode) im.decode().catch(()=>{});
+}
+
+async function api(body){
+  const r=await fetch('/api/room',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(Object.assign({sess:SESS,password:PW},body))});
+  return r.json();
+}
+async function pull(){
+  const r=await fetch(`/api/room?sess=${encodeURIComponent(SESS)}&password=${encodeURIComponent(PW)}`);
+  return r.json();
+}
+function esc(s){return (s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));}
+
+function clock(){
+  if(st.mode==='pairs'){ $('#clock').textContent=''; $('#bar').style.width='0%'; return; }
+  const left=Math.max(0,(st.next_ms-st.now)/1000);
+  $('#clock').textContent = left>0 ? left.toFixed(0)+'s' : 'now';
+  $('#bar').style.width = Math.max(0,Math.min(100,100-left/(st.period/1000)*100))+'%';
+}
+
+function render(){
+  const cur=st.current;
+  const vn = st.mode==='vn' || st.mode==='vnfind', pairs = st.mode==='pairs';
+  $('#hunt').textContent = cur ? (cur.mode==='vnfind' ? 'find the '+(cur.subject||'')+(cur.found?' - FOUND':'')
+    : cur.mode==='vn' ? (cur.subject || cur.things.map(t=>t.text).join(' '))
+    : cur.mode==='mash' ? cur.things.map(t=>t.text).join(' + ')
+    : cur.found+' / '+cur.count+' found') : '';
+  $('#qlist').style.display   = vn ? 'none' : '';
+  $('#vnboard').style.display = vn ? '' : 'none';
+  $('#qhead').textContent = vn ? 'One vote each - top of each column gets drawn'
+    : pairs ? 'On the list - press Submit to draw all of it'
+    : 'Next round - add yours on your phone';
+  const nxt = st.drawing[0] || st.ready[0];
+  $('#note').textContent = nxt ? 'next round: '+nxt.things.map(t=>t.text).join(', ')
+    : 'everything queued goes into the next picture';
+  clock();
+  warm(st.preload);
+  paint();
+  const stage=$('#stage');
+  if(cur){
+    if(shown!==cur.id){
+      shown=cur.id;
+      stage.innerHTML='<div class=marks id=marks></div>';
+      const img=new Image(); img.src=cur.image; stage.insertBefore(img,stage.firstChild);
+    }
+  }else{
+    shown=null;
+    const d=st.drawing[0];
+    stage.innerHTML='<div class=msg>'+(d
+      ? (d.mode==='vnfind' ? 'drawing <b>'+esc(d.subject||'')+'</b> and hiding it...'
+         : d.mode==='pairs' ? 'drawing everyone: <b>'+esc(d.things.map(t=>t.text).join(', '))+'</b>'
+         : d.mode==='vn' ? 'drawing <b>'+esc(d.subject || d.things.map(t=>t.text).join(' '))+'</b>'
+         : (d.mode==='mash'?'drawing ':'hiding ')+d.count+' thing'+(d.count===1?'':'s')
+           +' in one picture: <b>'+esc(d.things.map(t=>t.text).join(', '))+'</b>')
+      : 'waiting for the queue')+'</div>';
+  }
+  $('#thead').textContent = cur && cur.mode==='pairs' ? 'In this picture'
+    : cur && cur.mode==='vnfind' ? 'Hidden in this picture'
+    : cur && cur.mode==='vn' ? 'What the room chose'
+    : cur && cur.mode==='mash' ? 'What went into this picture' : 'Hidden in this picture';
+  $('#tlist').innerHTML = cur ? cur.things.map(t=>
+    `<div class=q>${t.thumb?`<img class=th src="${t.thumb}" alt="">`:''}`+
+    `<div class=t>${esc(t.text)}<div class=n>${esc(t.by)}</div></div>`+
+    `<div>${cur.mode==='vn' ? '<span class=open>'+esc(t.kind||'')+(t.votes?' &middot; '+t.votes:'')+'</span>'
+      : (cur.mode==='mash'||cur.mode==='pairs') ? '' : t.found_by?'<span class=win>'+esc(t.found_by)+'</span>'
+      :'<span class=open>open</span>'}</div></div>`
+  ).join('') : '<div class=q><div class=t style="color:#8f97a6">nothing on screen yet</div></div>';
+  if(vn){
+    const col=(rows,el)=>{ $(el).innerHTML = rows.slice(0,6).map((it,i)=>
+      `<div class=q><span class="v${i===0?' top':''}">${it.votes}</span><div class=t>${esc(it.text)}<div class=n>${esc(it.by)}</div></div></div>`
+    ).join('') || '<div class=q><div class=t style="color:#8f97a6">nothing yet</div></div>'; };
+    col(st.verbs,'#vlist'); col(st.nouns,'#nlist');
+  }
+  $('#qlist').innerHTML = st.queue.slice(0,12).map(it=>
+    `<div class=q>${pairs?'':'<span class="v top">'+it.votes+'</span>'}<div class=t>${esc(it.text)}<div class=n>${esc(it.by)}</div></div></div>`
+  ).join('') || `<div class=q><div class=t style="color:#8f97a6">empty - the house will pick one</div></div>`;
+}
+
+async function conduct(){
+  if(busy) return; busy=true;
+  try{
+    st=await pull();
+    if(st.error){ $('#msg').textContent=st.error; busy=false; return; }
+    render();
+    // Three jobs, in this order: finish anything the endpoint has drawn, put the next
+    // picture up when the one on screen has had its thirty seconds, and keep one picture
+    // drawing ahead so the GPU is never waiting for the room.
+    if(st.drawing.length || (st.ready.length && st.can_show)){ await api({action:'advance'}); st=await pull(); }
+    render();
+  }catch(e){}
+  busy=false;
+}
+conduct(); setInterval(conduct,2500);
+paint();
+setInterval(()=>{ if(st){ st.now+=250; clock(); } },250);
+</script>

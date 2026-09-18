@@ -1,0 +1,16 @@
+# binaries and secrets never go in git; rebuild with ytframe/ (go build) and vendor/ downloads (see README)
+vendor/
+ytmove_pack/bin/
+darwin_bin/
+ytframe_darwin
+.venv/
+outputs/
+run_inputs/
+__pycache__/
+cookies.txt
+*.log
+.push.json
+.deploy.json
+vercel_password.txt
+.manifest.json
+results/*.mp4

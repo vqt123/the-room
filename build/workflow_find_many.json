@@ -1,0 +1,876 @@
+{
+  "1": {
+    "class_type": "EmptyImage",
+    "_meta": {
+      "title": "scene canvas"
+    },
+    "inputs": {
+      "width": 1328,
+      "height": 1328,
+      "batch_size": 1,
+      "color": 8421504
+    }
+  },
+  "3": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "qwen_image_edit_2511_fp8mixed.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "4": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    }
+  },
+  "5": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    }
+  },
+  "6": {
+    "class_type": "ModelSamplingAuraFlow",
+    "inputs": {
+      "model": [
+        "3",
+        0
+      ],
+      "shift": 3.1
+    }
+  },
+  "7": {
+    "class_type": "CFGNorm",
+    "inputs": {
+      "model": [
+        "6",
+        0
+      ],
+      "strength": 1.0
+    }
+  },
+  "8": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "7",
+        0
+      ],
+      "lora_name": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+      "strength_model": 1.0
+    }
+  },
+  "9": {
+    "class_type": "FluxKontextImageScale",
+    "inputs": {
+      "image": [
+        "1",
+        0
+      ]
+    }
+  },
+  "10": {
+    "class_type": "TextEncodeQwenImageEditPlus",
+    "inputs": {
+      "clip": [
+        "4",
+        0
+      ],
+      "prompt": "a crowded city street market seen from above, hundreds of tiny shoppers, awnings, crates of fruit, bicycles, market stalls and pigeons, flat bright colours, thin black outlines, cartoon illustration, even detail across the whole frame, no single focal point, no text, no watermark, no border",
+      "vae": [
+        "5",
+        0
+      ],
+      "image1": [
+        "9",
+        0
+      ]
+    }
+  },
+  "11": {
+    "class_type": "TextEncodeQwenImageEditPlus",
+    "inputs": {
+      "clip": [
+        "4",
+        0
+      ],
+      "prompt": "text, watermark, blank, empty, plain background, one large subject, photograph, blurry",
+      "vae": [
+        "5",
+        0
+      ],
+      "image1": [
+        "9",
+        0
+      ]
+    }
+  },
+  "12": {
+    "class_type": "FluxKontextMultiReferenceLatentMethod",
+    "inputs": {
+      "conditioning": [
+        "10",
+        0
+      ],
+      "reference_latents_method": "index_timestep_zero"
+    }
+  },
+  "13": {
+    "class_type": "FluxKontextMultiReferenceLatentMethod",
+    "inputs": {
+      "conditioning": [
+        "11",
+        0
+      ],
+      "reference_latents_method": "index_timestep_zero"
+    }
+  },
+  "14": {
+    "class_type": "VAEEncode",
+    "inputs": {
+      "pixels": [
+        "9",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ]
+    }
+  },
+  "15": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "8",
+        0
+      ],
+      "positive": [
+        "12",
+        0
+      ],
+      "negative": [
+        "13",
+        0
+      ],
+      "latent_image": [
+        "14",
+        0
+      ],
+      "seed": 1234,
+      "steps": 4,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0
+    }
+  },
+  "16": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "15",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ]
+    }
+  },
+  "100": {
+    "class_type": "EmptyImage",
+    "_meta": {
+      "title": "canvas 0"
+    },
+    "inputs": {
+      "width": 768,
+      "height": 768,
+      "batch_size": 1,
+      "color": 16777215
+    }
+  },
+  "101": {
+    "class_type": "FluxKontextImageScale",
+    "inputs": {
+      "image": [
+        "100",
+        0
+      ]
+    }
+  },
+  "102": {
+    "class_type": "TextEncodeQwenImageEditPlus",
+    "inputs": {
+      "clip": [
+        "4",
+        0
+      ],
+      "prompt": "Draw a single rubber duck, one object only, simple flat cartoon illustration with a thin black outline, centred and filling most of the frame, completely plain pure white background, nothing else in the picture, no shadow, no text.",
+      "vae": [
+        "5",
+        0
+      ],
+      "image1": [
+        "101",
+        0
+      ]
+    }
+  },
+  "103": {
+    "class_type": "TextEncodeQwenImageEditPlus",
+    "inputs": {
+      "clip": [
+        "4",
+        0
+      ],
+      "prompt": "photo, shadow, gradient background, scene, hands, people, text, watermark, border",
+      "vae": [
+        "5",
+        0
+      ],
+      "image1": [
+        "101",
+        0
+      ]
+    }
+  },
+  "104": {
+    "class_type": "FluxKontextMultiReferenceLatentMethod",
+    "inputs": {
+      "conditioning": [
+        "102",
+        0
+      ],
+      "reference_latents_method": "index_timestep_zero"
+    }
+  },
+  "105": {
+    "class_type": "FluxKontextMultiReferenceLatentMethod",
+    "inputs": {
+      "conditioning": [
+        "103",
+        0
+      ],
+      "reference_latents_method": "index_timestep_zero"
+    }
+  },
+  "106": {
+    "class_type": "VAEEncode",
+    "inputs": {
+      "pixels": [
+        "101",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ]
+    }
+  },
+  "107": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "8",
+        0
+      ],
+      "positive": [
+        "104",
+        0
+      ],
+      "negative": [
+        "105",
+        0
+      ],
+      "latent_image": [
+        "106",
+        0
+      ],
+      "seed": 5476,
+      "steps": 4,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0
+    }
+  },
+  "108": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "107",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ]
+    }
+  },
+  "109": {
+    "class_type": "HideIt",
+    "_meta": {
+      "title": "Hide It 0 (private)"
+    },
+    "inputs": {
+      "scene": [
+        "16",
+        0
+      ],
+      "product": [
+        "108",
+        0
+      ],
+      "difficulty": 3,
+      "seed": 2075443165,
+      "keep_alpha": false,
+      "patch_margin": 0.45
+    }
+  },
+  "111": {
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "thing 0"
+    },
+    "inputs": {
+      "images": [
+        "108",
+        0
+      ],
+      "filename_prefix": [
+        "109",
+        2
+      ]
+    }
+  },
+  "120": {
+    "class_type": "EmptyImage",
+    "_meta": {
+      "title": "canvas 1"
+    },
+    "inputs": {
+      "width": 768,
+      "height": 768,
+      "batch_size": 1,
+      "color": 16777215
+    }
+  },
+  "121": {
+    "class_type": "FluxKontextImageScale",
+    "inputs": {
+      "image": [
+        "120",
+        0
+      ]
+    }
+  },
+  "122": {
+    "class_type": "TextEncodeQwenImageEditPlus",
+    "inputs": {
+      "clip": [
+        "4",
+        0
+      ],
+      "prompt": "Draw a single taco, one object only, simple flat cartoon illustration with a thin black outline, centred and filling most of the frame, completely plain pure white background, nothing else in the picture, no shadow, no text.",
+      "vae": [
+        "5",
+        0
+      ],
+      "image1": [
+        "121",
+        0
+      ]
+    }
+  },
+  "123": {
+    "class_type": "TextEncodeQwenImageEditPlus",
+    "inputs": {
+      "clip": [
+        "4",
+        0
+      ],
+      "prompt": "photo, shadow, gradient background, scene, hands, people, text, watermark, border",
+      "vae": [
+        "5",
+        0
+      ],
+      "image1": [
+        "121",
+        0
+      ]
+    }
+  },
+  "124": {
+    "class_type": "FluxKontextMultiReferenceLatentMethod",
+    "inputs": {
+      "conditioning": [
+        "122",
+        0
+      ],
+      "reference_latents_method": "index_timestep_zero"
+    }
+  },
+  "125": {
+    "class_type": "FluxKontextMultiReferenceLatentMethod",
+    "inputs": {
+      "conditioning": [
+        "123",
+        0
+      ],
+      "reference_latents_method": "index_timestep_zero"
+    }
+  },
+  "126": {
+    "class_type": "VAEEncode",
+    "inputs": {
+      "pixels": [
+        "121",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ]
+    }
+  },
+  "127": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "8",
+        0
+      ],
+      "positive": [
+        "124",
+        0
+      ],
+      "negative": [
+        "125",
+        0
+      ],
+      "latent_image": [
+        "126",
+        0
+      ],
+      "seed": 13395,
+      "steps": 4,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0
+    }
+  },
+  "128": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "127",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ]
+    }
+  },
+  "129": {
+    "class_type": "HideIt",
+    "_meta": {
+      "title": "Hide It 1 (private)"
+    },
+    "inputs": {
+      "scene": [
+        "109",
+        0
+      ],
+      "product": [
+        "128",
+        0
+      ],
+      "difficulty": 3,
+      "seed": 1671098288,
+      "keep_alpha": false,
+      "patch_margin": 0.45
+    }
+  },
+  "130": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "109",
+        1
+      ],
+      "source": [
+        "129",
+        1
+      ],
+      "x": 0,
+      "y": 0,
+      "operation": "add"
+    }
+  },
+  "131": {
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "thing 1"
+    },
+    "inputs": {
+      "images": [
+        "128",
+        0
+      ],
+      "filename_prefix": [
+        "129",
+        2
+      ]
+    }
+  },
+  "140": {
+    "class_type": "EmptyImage",
+    "_meta": {
+      "title": "canvas 2"
+    },
+    "inputs": {
+      "width": 768,
+      "height": 768,
+      "batch_size": 1,
+      "color": 16777215
+    }
+  },
+  "141": {
+    "class_type": "FluxKontextImageScale",
+    "inputs": {
+      "image": [
+        "140",
+        0
+      ]
+    }
+  },
+  "142": {
+    "class_type": "TextEncodeQwenImageEditPlus",
+    "inputs": {
+      "clip": [
+        "4",
+        0
+      ],
+      "prompt": "Draw a single traffic cone, one object only, simple flat cartoon illustration with a thin black outline, centred and filling most of the frame, completely plain pure white background, nothing else in the picture, no shadow, no text.",
+      "vae": [
+        "5",
+        0
+      ],
+      "image1": [
+        "141",
+        0
+      ]
+    }
+  },
+  "143": {
+    "class_type": "TextEncodeQwenImageEditPlus",
+    "inputs": {
+      "clip": [
+        "4",
+        0
+      ],
+      "prompt": "photo, shadow, gradient background, scene, hands, people, text, watermark, border",
+      "vae": [
+        "5",
+        0
+      ],
+      "image1": [
+        "141",
+        0
+      ]
+    }
+  },
+  "144": {
+    "class_type": "FluxKontextMultiReferenceLatentMethod",
+    "inputs": {
+      "conditioning": [
+        "142",
+        0
+      ],
+      "reference_latents_method": "index_timestep_zero"
+    }
+  },
+  "145": {
+    "class_type": "FluxKontextMultiReferenceLatentMethod",
+    "inputs": {
+      "conditioning": [
+        "143",
+        0
+      ],
+      "reference_latents_method": "index_timestep_zero"
+    }
+  },
+  "146": {
+    "class_type": "VAEEncode",
+    "inputs": {
+      "pixels": [
+        "141",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ]
+    }
+  },
+  "147": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "8",
+        0
+      ],
+      "positive": [
+        "144",
+        0
+      ],
+      "negative": [
+        "145",
+        0
+      ],
+      "latent_image": [
+        "146",
+        0
+      ],
+      "seed": 21314,
+      "steps": 4,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0
+    }
+  },
+  "148": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "147",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ]
+    }
+  },
+  "149": {
+    "class_type": "HideIt",
+    "_meta": {
+      "title": "Hide It 2 (private)"
+    },
+    "inputs": {
+      "scene": [
+        "129",
+        0
+      ],
+      "product": [
+        "148",
+        0
+      ],
+      "difficulty": 3,
+      "seed": 946466064,
+      "keep_alpha": false,
+      "patch_margin": 0.45
+    }
+  },
+  "150": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "130",
+        0
+      ],
+      "source": [
+        "149",
+        1
+      ],
+      "x": 0,
+      "y": 0,
+      "operation": "add"
+    }
+  },
+  "151": {
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "thing 2"
+    },
+    "inputs": {
+      "images": [
+        "148",
+        0
+      ],
+      "filename_prefix": [
+        "149",
+        2
+      ]
+    }
+  },
+  "46": {
+    "class_type": "FeatherMask",
+    "inputs": {
+      "mask": [
+        "150",
+        0
+      ],
+      "left": 6,
+      "top": 6,
+      "right": 6,
+      "bottom": 6
+    }
+  },
+  "47": {
+    "class_type": "TextEncodeQwenImageEditPlus",
+    "_meta": {
+      "title": "redraw the patches"
+    },
+    "inputs": {
+      "clip": [
+        "4",
+        0
+      ],
+      "prompt": "A rubber duck, a taco and a traffic cone have each been placed into this picture. Keep every one of them exactly where it is, at exactly the same size, still clearly what it is. Only give each of them the same thin black outline, the same flat colours and the same shading as the things drawn around it, so they look drawn into the picture rather than stuck on top. Do not remove any of them. Do not replace any of them with anything else. Change nothing else in the picture.",
+      "vae": [
+        "5",
+        0
+      ],
+      "image1": [
+        "149",
+        0
+      ],
+      "image2": [
+        "108",
+        0
+      ],
+      "image3": [
+        "128",
+        0
+      ]
+    }
+  },
+  "48": {
+    "class_type": "TextEncodeQwenImageEditPlus",
+    "_meta": {
+      "title": "redraw negative"
+    },
+    "inputs": {
+      "clip": [
+        "4",
+        0
+      ],
+      "prompt": "pasted, cut out, sticker, out of place, photo, blurry, text, watermark, different object",
+      "vae": [
+        "5",
+        0
+      ],
+      "image1": [
+        "149",
+        0
+      ]
+    }
+  },
+  "49": {
+    "class_type": "FluxKontextMultiReferenceLatentMethod",
+    "inputs": {
+      "conditioning": [
+        "47",
+        0
+      ],
+      "reference_latents_method": "index_timestep_zero"
+    }
+  },
+  "50": {
+    "class_type": "FluxKontextMultiReferenceLatentMethod",
+    "inputs": {
+      "conditioning": [
+        "48",
+        0
+      ],
+      "reference_latents_method": "index_timestep_zero"
+    }
+  },
+  "51": {
+    "class_type": "VAEEncode",
+    "inputs": {
+      "pixels": [
+        "149",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ]
+    }
+  },
+  "52": {
+    "class_type": "SetLatentNoiseMask",
+    "inputs": {
+      "samples": [
+        "51",
+        0
+      ],
+      "mask": [
+        "46",
+        0
+      ]
+    }
+  },
+  "53": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "8",
+        0
+      ],
+      "positive": [
+        "49",
+        0
+      ],
+      "negative": [
+        "50",
+        0
+      ],
+      "latent_image": [
+        "52",
+        0
+      ],
+      "seed": 2011,
+      "steps": 4,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 0.45
+    }
+  },
+  "54": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "53",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ]
+    }
+  },
+  "31": {
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "the puzzle"
+    },
+    "inputs": {
+      "images": [
+        "54",
+        0
+      ],
+      "filename_prefix": "puzzle"
+    }
+  }
+}

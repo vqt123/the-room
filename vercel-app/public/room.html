@@ -1,0 +1,267 @@
+<!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>The Room</title>
+<style>
+:root{--bg:#0b0d12;--card:#161922;--ink:#eceff5;--mut:#8f97a6;--acc:#ffd23c;--ok:#5ddc97;--bad:#ff6b6b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:620px;margin:0 auto;padding:16px 14px 60px}
+h1{font-size:28px;margin:0 0 2px;letter-spacing:.02em}
+.sub{color:var(--mut);margin:0 0 14px;font-size:14px}
+.card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:12px}
+input[type=text],input[type=password]{width:100%;padding:11px 12px;border-radius:8px;border:1px solid #2a2f3a;background:#0b0d12;color:var(--ink);font-size:16px}
+button{padding:12px 14px;border:0;border-radius:10px;background:var(--acc);color:#1a1400;font-size:16px;font-weight:800;cursor:pointer}
+button:disabled{opacity:.45;cursor:default}
+.ghost{background:#2a2f3a;color:var(--ink);font-weight:600;font-size:14px;padding:8px 12px}
+.small{font-size:13px;color:var(--mut)}
+.row{display:flex;gap:8px;align-items:center}
+.stage{position:relative;line-height:0;border-radius:12px;overflow:hidden;background:#000;min-height:120px}
+.stage img{width:100%;display:block;cursor:crosshair}
+.mark{position:absolute;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;border:3px solid var(--bad);pointer-events:none;animation:pop .3s ease-out}
+.mark.win{border-color:var(--ok);width:70px;height:70px;margin:-35px 0 0 -35px}
+@keyframes pop{from{transform:scale(1.6);opacity:0}to{transform:scale(1);opacity:1}}
+.pill{background:#222736;border-radius:999px;padding:5px 11px;font-size:13px;display:inline-block}
+.pill b{color:var(--acc)}
+.q{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #222736}
+.q:last-child{border-bottom:0}
+.q .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.q .n{font-size:12px;color:var(--mut)}
+.up{background:#2a2f3a;color:var(--ink);border-radius:999px;font-weight:700;font-size:14px;padding:7px 13px;min-width:56px}
+.up.on{background:var(--acc);color:#1a1400}
+.status{min-height:20px;font-size:14px}
+.busy{padding:18px 14px;line-height:1.5;font-size:16px}.busy .n{color:var(--mut);font-size:13px;margin-top:4px}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--mut);border-top-color:var(--ink);border-radius:50%;animation:s .8s linear infinite;vertical-align:-2px;margin-right:8px}
+@keyframes s{to{transform:rotate(360deg)}}.status.err{color:var(--bad)}.status.ok{color:var(--ok)}
+.win{color:var(--ok);font-weight:700}
+.th{width:30px;height:30px;object-fit:contain;background:#fff;border-radius:6px;flex:0 0 auto}
+a{color:var(--acc)}
+</style>
+<div class=wrap>
+<h1>The Room</h1>
+<p class=sub>Add as many things as you like. Everything waiting goes into the SAME picture, all hidden at once, and the room races to tap them. Each thing goes to whoever finds it first.</p>
+
+<div class=card id=joincard>
+  <div class=row><input type=text id=name placeholder="your name" maxlength=14><input type=password id=pw placeholder="password" style="max-width:150px"></div>
+  <div class=row style="margin-top:10px"><button id=join style="flex:1">Join the room</button></div>
+  <div class="status" id=joinst></div>
+</div>
+
+<div class=card id=game style="display:none">
+  <div class=row style="justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px">
+    <span class=pill id=phase>waiting</span>
+    <span class=pill>find <b id=thing>-</b></span>
+    <span class=pill><b id=clock>-</b></span>
+  </div>
+  <div id=next></div>
+  <div class=stage id=stage><p class=small style="padding:14px;line-height:1.45">Nothing on screen yet.</p></div>
+  <div class=status id=result></div>
+</div>
+
+<div class=card id=addcard style="display:none">
+  <div class=row id=onebox><input type=text id=text placeholder="a rubber duck" maxlength=40><button id=add>Add</button></div>
+  <div id=vnbox style="display:none">
+    <div class=row><input type=text id=verb placeholder="verb: dancing" maxlength=24><button id=addverb style="flex:0 0 auto">Verb</button></div>
+    <div class=row style="margin-top:8px"><input type=text id=noun placeholder="noun: a shark" maxlength=24><button id=addnoun style="flex:0 0 auto">Noun</button></div>
+  </div>
+  <div class="small" style="margin-top:6px">Add as many as you like. <span id=cap></span></div>
+
+  <div class=status id=addst></div>
+</div>
+
+<div class=card id=board style="display:none"><b>Hidden in this picture</b><div id=blist></div></div>
+<div class=card id=qcard style="display:none"><b id=qtitle>Going into the next picture</b><div id=qlist></div></div>
+<div class=card id=vncard style="display:none">
+  <b>Verbs</b><div id=vlist></div>
+  <b style="display:block;margin-top:14px">Nouns</b><div id=nlist></div>
+</div>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const SESS=new URLSearchParams(location.search).get('sess')||'main';
+let VOTER=localStorage.getItem('room_voter');
+if(!VOTER){VOTER=Math.random().toString(36).slice(2,12).replace(/[^a-z0-9]/g,'x');localStorage.setItem('room_voter',VOTER);}
+let PW=localStorage.getItem('stm_pw')||'', NAME=localStorage.getItem('room_name')||'';
+$('#pw').value=PW; $('#name').value=NAME;
+let st=null, joined=false, shownItem=null, myTaps=0, warmed=null;
+
+// Pull the next picture while the room is still on this one, so the flip is instant.
+function warm(url){
+  if(!url || warmed===url) return;
+  warmed=url; const im=new Image(); im.decoding='async'; im.src=url;
+  if(im.decode) im.decode().catch(()=>{});
+}
+
+async function api(body){
+  const r=await fetch('/api/room',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(Object.assign({sess:SESS,password:PW,voter:VOTER,name:NAME},body))});
+  const j=await r.json(); if(j.error) throw new Error(j.error); return j;
+}
+async function pull(){
+  const r=await fetch(`/api/room?sess=${encodeURIComponent(SESS)}&password=${encodeURIComponent(PW)}`);
+  const j=await r.json(); if(j.error) throw new Error(j.error); return j;
+}
+
+$('#join').onclick=async()=>{
+  PW=$('#pw').value.trim(); NAME=($('#name').value.trim()||'someone').slice(0,14);
+  localStorage.setItem('stm_pw',PW); localStorage.setItem('room_name',NAME);
+  $('#joinst').className='status'; $('#joinst').textContent='joining...';
+  try{ await pull(); joined=true; $('#joincard').style.display='none';
+    for(const id of ['#game','#addcard','#qcard','#board']) $(id).style.display='';
+    loop();
+  }catch(e){ $('#joinst').className='status err'; $('#joinst').textContent=e.message; }
+};
+
+$('#add').onclick=async()=>{
+  const t=$('#text').value.trim(); if(!t) return;
+  $('#add').disabled=true;
+  try{ await api({action:'add',text:t}); $('#text').value=''; $('#addst').className='status ok'; $('#addst').textContent='in the queue'; await tick(); }
+  catch(e){ $('#addst').className='status err'; $('#addst').textContent=e.message; }
+  $('#add').disabled=false;
+};
+$('#text').addEventListener('keydown',e=>{if(e.key==='Enter')$('#add').click();});
+
+async function submitKind(kind){
+  if(st && st.mode==='pairs'){
+    const v=$('#verb').value.trim(), n=$('#noun').value.trim(); if(!v||!n){ $('#addst').className='status err'; $('#addst').textContent='both a verb and a noun'; return; }
+    $('#addnoun').disabled=true;
+    try{ const g=await api({action:'add',verb:v,noun:n}); $('#verb').value=''; $('#noun').value='';
+      $('#addst').className='status ok'; $('#addst').textContent='"'+g.text+'" is in'; await tick(); }
+    catch(e){ $('#addst').className='status err'; $('#addst').textContent=e.message; }
+    $('#addnoun').disabled=false; return;
+  }
+  const el=$('#'+kind), t=el.value.trim(); if(!t) return;
+  const btn=$('#add'+kind); btn.disabled=true;
+  try{ const g=await api({action:'add',text:t,kind:kind}); el.value='';
+    $('#addst').className='status ok'; $('#addst').textContent='"'+g.text+'" is up, and you voted for it'; await tick(); }
+  catch(e){ $('#addst').className='status err'; $('#addst').textContent=e.message; }
+  btn.disabled=false;
+}
+$('#addverb').onclick=()=>submitKind('verb');
+$('#addnoun').onclick=()=>submitKind('noun');
+for(const k of ['verb','noun']) $('#'+k).addEventListener('keydown',e=>{if(e.key==='Enter')submitKind(k);});
+
+// One vote per pool: the buttons are radio buttons, not counters.
+function pool(rows, el){
+  el.innerHTML = rows.map(it=>{
+    const mine=it.voters.includes(VOTER);
+    return `<div class=q><button class="up${mine?' on':''}" data-id="${it.id}">${mine?'&#9679;':'&#9675;'} ${it.votes}</button>`+
+           `<div class=t>${esc(it.text)}<div class=n>${esc(it.by)}</div></div></div>`;
+  }).join('') || '<div class=small style="padding:8px 0">nothing yet</div>';
+  el.querySelectorAll('.up').forEach(b=>b.onclick=async()=>{
+    b.disabled=true; try{ await api({action:'vote',item:b.dataset.id}); await tick(); }catch(e){} b.disabled=false;});
+}
+for(const id of ['#name','#pw']) $(id).addEventListener('keydown',e=>{if(e.key==='Enter')$('#join').click();});
+
+function drawingBanner(){
+  const d=st.drawing[0], r=st.ready[0];
+  if(d){
+    const secs=Math.max(0,Math.round((st.now-d.ms)/1000));
+    const what=d.mode==='find'?'hiding':'drawing';
+    return `<div class=busy><span class=spin></span><b>${what} ${d.count} thing${d.count===1?'':'s'}</b> - ${secs}s`+
+           `<div class=n>${esc(d.things.map(t=>t.text).join(', '))}</div>`+
+           `<div class=n>about ${d.mode==='find'?'25':'12'} seconds, then it goes up here and on the big screen</div></div>`;
+  }
+  if(r) return `<div class=busy><b>ready</b> - going up in a moment<div class=n>${esc(r.things.map(t=>t.text).join(', '))}</div></div>`;
+  return '';
+}
+function stage(cur){
+  const wrap=$('#stage');
+  if(!cur){
+    const b=drawingBanner();
+    wrap.innerHTML = b || '<p class=small style="padding:14px">nothing on screen yet - add a verb and a noun; the big screen presses Submit</p>';
+    shownItem=null; return;
+  }
+  $('#next').innerHTML = drawingBanner();
+  if(shownItem===cur.id) return;
+  shownItem=cur.id; myTaps=0; $('#result').textContent='';
+  wrap.innerHTML='';
+  const img=new Image(); img.src=cur.image; img.alt='find it';
+  if(st.mode==='find'||st.mode==='vnfind') img.onclick=ev=>tap(ev,img,cur);
+  else img.style.cursor='default';
+  wrap.appendChild(img);
+}
+function esc(s){return (s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));}
+
+async function tap(ev,img,cur){
+  const r=img.getBoundingClientRect();
+  const x=Math.round((ev.clientX-r.left)/r.width*1000), y=Math.round((ev.clientY-r.top)/r.height*1000);
+  myTaps++;
+  try{
+    const g=await api({action:'found',round:cur.id,x:x,y:y});
+    if(g.error){ $('#result').className='status err'; $('#result').textContent=g.error; return; }
+    const m=document.createElement('div'); m.className='mark'+(g.hit?' win':'');
+    m.style.left=(x/10)+'%'; m.style.top=(y/10)+'%'; $('#stage').appendChild(m);
+    if(g.hit){ $('#result').className='status ok';
+      $('#result').textContent = g.first ? 'You found '+g.text+' first'
+        : g.text+' - '+(g.taken_by||'someone')+' got there first'; }
+    else{ $('#result').className='status'; $('#result').textContent=g.hint+' - nearest is '+g.distance+' away'; }
+    tick();
+  }catch(e){ $('#result').className='status err'; $('#result').textContent=e.message; }
+}
+
+function render(){
+  const cur=st.current;
+  const vnf = st.mode==='vnfind', vn = st.mode==='vn' || vnf, pairs = st.mode==='pairs';
+  const mash = st.mode==='mash' || pairs;
+  const picture = (vn && !vnf) || mash;
+  $('#onebox').style.display = (vn||pairs) ? 'none' : '';
+  $('#vnbox').style.display  = (vn||pairs) ? '' : 'none';
+  $('#addverb').style.display = pairs ? 'none' : '';
+  $('#addnoun').textContent = pairs ? 'Add' : 'Noun';
+  $('#qcard').style.display  = vn ? 'none' : '';
+  $('#vncard').style.display = vn ? '' : 'none';
+  $('#phase').textContent = cur ? (vnf ? (cur.found?'found':'find it') : pairs ? 'everyone\'s in' : vn ? 'the room chose'
+    : mash ? 'mash-up' : cur.found+' / '+cur.count+' found')
+    : (st.drawing.length ? 'drawing' : 'waiting');
+  $('#thing').textContent = cur
+    ? (vn ? (cur.things.map(t=>t.text).join(' ')) : mash ? cur.count+' words'
+       : cur.things.filter(t=>!t.found_by).length+' left')
+    : '-';
+  const left=Math.max(0,Math.round(st.show_left/1000));
+  $('#clock').textContent = pairs ? (cur ? 'up' : '') : cur ? left+'s left' : 'soon';
+  $('#cap').textContent = pairs
+    ? 'Everyone\'s verb + noun goes into ONE picture when Submit is pressed on the big screen. Then the list is cleared.'
+    : vnf
+    ? 'One vote in each pool. What wins gets drawn, hidden in a busy picture, and you have to tap it.'
+    : vn
+    ? 'One vote in each pool. The top verb and the top noun get drawn, then the board is wiped.'
+    : mash
+    ? 'Everything typed before the next flip goes into ONE picture, up to '+st.max_things+' words.'
+    : 'Up to '+st.max_things+' get hidden in one picture; the rest wait for the next.';
+  warm(st.preload);
+  stage(cur);
+  if(vn){ pool(st.verbs,$('#vlist')); pool(st.nouns,$('#nlist')); }
+  if(pairs){ $('#qcard').style.display=''; $('#vncard').style.display='none'; }
+
+  $('#qtitle').textContent = pairs ? 'Going into the next picture' : 'Going into the next picture';
+  const qs=st.queue.map(it=>{
+    const on=it.voters.includes(VOTER);
+    return pairs
+      ? `<div class=q><div class=t>${esc(it.text)}<div class=n>${esc(it.by)}</div></div></div>`
+      : `<div class=q><button class="up${on?' on':''}" data-id="${it.id}">${on?'&#9650;':'&#9651;'} ${it.votes}</button>`+
+        `<div class=t>${esc(it.text)}<div class=n>${esc(it.by)}</div></div></div>`;
+  }).join('');
+  $('#qlist').innerHTML = qs || '<div class=small style="padding:8px 0">empty - add something</div>';
+  $('#qlist').querySelectorAll('.up').forEach(b=>b.onclick=async()=>{
+    b.disabled=true; try{ await api({action:'vote',item:b.dataset.id}); await tick(); }catch(e){} b.disabled=false;});
+  $('#board').firstElementChild.textContent = vnf ? 'Find what the room chose' : pairs ? 'In this picture' : vn ? 'What the room chose'
+    : mash ? 'What went into this picture' : 'Hidden in this picture';
+  $('#blist').innerHTML = cur ? cur.things.map(t=>
+    `<div class=q>${t.thumb?`<img class=th src="${t.thumb}" alt="">`:''}`+
+    `<div class=t>${esc(t.text)}<div class=n>${esc(t.by)}</div></div>`+
+    `<div>${picture ? (t.kind?'<span class=small>'+t.kind+'</span>':'')
+      : t.found_by?'<span class=win>'+esc(t.found_by)+'</span>'
+      :'<span class=small>open</span>'}</div></div>`
+  ).join('') : '<div class=small style="padding:8px 0">nothing on screen yet</div>';
+}
+
+let advancing=false;
+async function tick(){
+  try{ st=await pull(); render();
+    if(!advancing && (st.drawing.length || (st.ready.length && st.can_show))){
+      advancing=true; try{ await api({action:'advance'}); st=await pull(); render(); }catch(e){} advancing=false;
+    }
+  }catch(e){}
+}
+function loop(){ tick(); setInterval(tick,2500); setInterval(()=>{ if(st){ st.show_left=Math.max(0,st.show_left-500); st.now+=500; const l=Math.max(0,Math.round(st.show_left/1000)); $('#clock').textContent=st.mode==='pairs'?(st.current?'up':''):st.current?l+'s left':'soon'; if(st.drawing.length||st.ready.length){ const b=drawingBanner(); if(st.current) $('#next').innerHTML=b; else $('#stage').innerHTML=b; } } },500); }
+if(PW&&NAME) $('#join').click();
+</script>

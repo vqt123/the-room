@@ -1,0 +1,10 @@
+[project]
+name = "ytmove"
+description = "Private pack: YouTube frame at a timestamp via a bundled compiled binary."
+version = "0.1.0"
+license = { text = "Proprietary" }
+dependencies = []
+
+[tool.comfy]
+PublisherId = ""
+DisplayName = "ytmove (private)"

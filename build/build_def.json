@@ -1,0 +1,38 @@
+{
+  "schema": "comfy-build/1",
+  "baseImage": "cuda130-py312",
+  "models": [
+    {
+      "type": "diffusion_models",
+      "filename": "qwen_image_edit_2511_fp8mixed.safetensors",
+      "sourceUri": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors"
+    },
+    {
+      "type": "text_encoders",
+      "filename": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "sourceUri": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors"
+    },
+    {
+      "type": "vae",
+      "filename": "qwen_image_vae.safetensors",
+      "sourceUri": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors"
+    },
+    {
+      "type": "loras",
+      "filename": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+      "sourceUri": "https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/resolve/main/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"
+    }
+  ],
+  "customNodes": [
+    {
+      "name": "ytmove",
+      "repository": null,
+      "gitRef": null,
+      "source": "local",
+      "localPath": "ytmove_pack"
+    }
+  ],
+  "pipDependencies": "",
+  "environment": {},
+  "baseComfyVersion": "v0.36.0"
+}

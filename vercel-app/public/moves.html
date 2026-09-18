@@ -1,0 +1,77 @@
+<!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>Steal the Moves</title>
+<style>
+:root{--bg:#0f1115;--card:#181b22;--ink:#e8eaf0;--mut:#9aa3b2;--acc:#7c5cff;--ok:#3ddc97;--bad:#ff6b6b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:32px 20px}h1{font-size:34px;margin:0 0 4px}.sub{color:var(--mut);margin:0 0 24px}
+.grid{display:grid;grid-template-columns:380px 1fr;gap:24px}@media(max-width:820px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border-radius:14px;padding:20px}label{display:block;font-weight:600;margin:14px 0 6px}label:first-child{margin-top:0}
+input[type=text],input[type=password]{width:100%;padding:10px 12px;border-radius:8px;border:1px solid #2a2f3a;background:#0f1115;color:var(--ink);font-size:15px}
+.drop{border:2px dashed #2a2f3a;border-radius:10px;padding:18px;text-align:center;color:var(--mut);cursor:pointer}.drop.has{border-color:var(--acc);color:var(--ink)}
+.drop img{max-height:140px;border-radius:8px;display:block;margin:0 auto 8px}
+button{margin-top:18px;width:100%;padding:13px;border:0;border-radius:10px;background:var(--acc);color:#fff;font-size:17px;font-weight:700;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}.small{font-size:13px;color:var(--mut)}
+.status{margin-top:14px;min-height:22px}.status.err{color:var(--bad)}.status.ok{color:var(--ok)}
+.out img{width:100%;border-radius:10px;background:#000}.out h3{margin:0 0 8px;font-size:14px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.hist{margin-top:18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}.hist img{width:100%;border-radius:8px;cursor:pointer}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--mut);border-top-color:var(--ink);border-radius:50%;animation:s .8s linear infinite;vertical-align:-2px;margin-right:8px}@keyframes s{to{transform:rotate(360deg)}}
+a{color:var(--acc)}.foot{margin-top:28px;color:var(--mut);font-size:13px}
+</style>
+<div class=wrap>
+<h1>Steal the Moves</h1>
+<p class=sub>A video link, a moment, your photo. You, doing that move.</p>
+<div class=grid>
+<form class=card id=f>
+<label>Video link</label><input type=text id=url placeholder="https://www.youtube.com/watch?v=..." required>
+<div class=small style="margin-top:6px">Try: <a href=# data-u="https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4" data-t="5:20" data-w="the rabbit">Big Buck Bunny (direct mp4)</a> ·
+<a href=# data-u="https://www.youtube.com/watch?v=i0OQmw5WSIQ" data-t="2:10" data-w="">body wave (YouTube)</a> ·
+<a href=# data-u="https://www.youtube.com/watch?v=Ewqq-3xJFdI" data-t="3:20" data-w="the woman in the yellow top dancing in the centre">African dance (YouTube, four people)</a></div>
+<label>Moment (mm:ss)</label><input type=text id=ts value="0:05" required>
+<label>Your photo</label>
+<div class=drop id=drop><span>Drop a photo here or click to choose</span><input type=file id=file accept="image/*" hidden></div>
+<label>Which person? <span class=small>(only if the frame has several)</span></label><input type=text id=who placeholder="the main person in the centre of the frame">
+<label>Password <span class=small>(ask Vinh)</span></label><input type=password id=pw>
+<button id=go>Do the move</button>
+<div class=status id=st></div>
+</form>
+<div class=card>
+<div class=out id=out><h3>You</h3><p class=small>The frame is pulled out of the video inside the Comfy endpoint by a private node, then the swap runs on the same endpoint. About 30 seconds when the worker is warm, a few minutes when it is cold.</p></div>
+<div class=hist id=hist></div>
+</div></div>
+<div class=card style="margin-top:16px" id=queue><b>Endpoint queue</b> <span class=small id=qtext>loading...</span><div class=small id=qjobs></div></div>
+<details class=card style="margin-top:16px" id=dbg><summary style="cursor:pointer"><b>Debug</b> <span class=small>build, release, deployment, endpoint health, current job</span></summary><pre id=dbgpre class=small style="white-space:pre-wrap;word-break:break-all;margin:10px 0 0"></pre><p class=small><a href=# id=dbgrefresh>refresh</a></p></details>
+<p class=foot><a href=/>Find It</a> and <a href=/tape.html>Senior Year '88</a> are the other two. Built on the Comfy Developer Platform: a ComfyUI workflow plus a private custom node (a compiled binary that reads the video), deployed as a serverless endpoint. This page only forwards your request to it.</p>
+</div>
+<script>
+const $=s=>document.querySelector(s);let photo=null;
+try{$('#pw').value=localStorage.getItem('stm_pw')||''}catch(e){}
+$('#drop').onclick=()=>$('#file').click();$('#file').onchange=e=>setPhoto(e.target.files[0]);
+['dragover','dragenter'].forEach(ev=>$('#drop').addEventListener(ev,e=>e.preventDefault()));
+$('#drop').addEventListener('drop',e=>{e.preventDefault();setPhoto(e.dataTransfer.files[0]);});
+function setPhoto(f){if(!f)return;photo=f;const r=new FileReader();r.onload=()=>{$('#drop').classList.add('has');$('#drop').innerHTML=`<img src="${r.result}"><span>${f.name}</span><input type=file id=file accept="image/*" hidden>`;$('#file').onchange=e=>setPhoto(e.target.files[0]);};r.readAsDataURL(f);}
+document.querySelectorAll('a[data-u]').forEach(a=>a.onclick=e=>{e.preventDefault();$('#url').value=a.dataset.u;$('#ts').value=a.dataset.t;$('#who').value=a.dataset.w;});
+let curJob=null;
+async function refreshQueue(){try{const r=await fetch('/api/queue?password='+encodeURIComponent($('#pw').value)+(curJob?'&id='+curJob:''));const q=await r.json();
+if(q.error){$('#qtext').textContent=q.error;return;}
+$('#qtext').textContent=`${q.waiting} job${q.waiting===1?'':'s'} in the queue · worker ${q.running?'busy':(q.waiting?'waking up (a few minutes when cold)':'idle')}`+(q.ahead!=null?` · yours is #${q.ahead+1}`:'');
+$('#qjobs').innerHTML=(q.jobs||[]).map(j=>`<span style="display:inline-block;margin:6px 6px 0 0;padding:2px 8px;border-radius:6px;background:${j.started?'#2b3a2f':'#2a2f3a'}">${j.id} ${j.started?'running':'waiting'}</span>`).join('');
+}catch(e){$('#qtext').textContent='queue unavailable';}}
+setInterval(refreshQueue,5000);refreshQueue();
+async function refreshDebug(){try{const r=await fetch('/api/debug?password='+encodeURIComponent($('#pw').value)+(curJob?'&id='+curJob:''));$('#dbgpre').textContent=JSON.stringify(await r.json(),null,2);}catch(e){$('#dbgpre').textContent='debug unavailable: '+e;}}
+$('#dbg').addEventListener('toggle',()=>{if($('#dbg').open)refreshDebug();});$('#dbgrefresh').onclick=e=>{e.preventDefault();refreshDebug();};setInterval(()=>{if($('#dbg').open)refreshDebug();},10000);
+function status(h,c){const s=$('#st');s.className='status '+(c||'');s.innerHTML=h;}
+$('#f').onsubmit=async e=>{e.preventDefault();if(!photo){status('Add a photo first.','err');return;}
+try{localStorage.setItem('stm_pw',$('#pw').value)}catch(e){}
+const fd=new FormData();fd.append('url',$('#url').value.trim());fd.append('timestamp',$('#ts').value.trim());fd.append('who',$('#who').value.trim());fd.append('password',$('#pw').value);fd.append('profile',photo,photo.name);
+$('#go').disabled=true;status('<span class=spin></span>sending');
+const r=await fetch('/api/run',{method:'POST',body:fd});const j=await r.json();
+if(!r.ok||j.error){$('#go').disabled=false;status('Failed: '+(j.error||r.status),'err');return;}
+curJob=j.id;refreshQueue();poll(j.id,Date.now());};
+async function poll(id,t0){const r=await fetch('/api/job?id='+encodeURIComponent(id)+'&password='+encodeURIComponent($('#pw').value));const j=await r.json();const secs=((Date.now()-t0)/1000).toFixed(0);
+if(j.state==='running'){status(`<span class=spin></span>${j.status||'working'} · ${secs}s`+(j.progress!=null?` · ${Math.round(j.progress*100)}%`:''));setTimeout(()=>poll(id,t0),2000);return;}
+$('#go').disabled=false;
+if(j.state==='error'){status('Failed: '+j.error,'err');return;}
+const src='data:image/png;base64,'+j.result_b64;$('#out').innerHTML=`<h3>You</h3><img src="${src}"><p class=small><a download="steal-the-moves.png" href="${src}">download</a></p>`;
+status(`Done in ${secs}s. Frame grabbed inside the endpoint by the private node.`,'ok');
+const im=document.createElement('img');im.src=src;im.onclick=()=>window.open(src);$('#hist').prepend(im);}
+</script></html>

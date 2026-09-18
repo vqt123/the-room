@@ -1,0 +1,25 @@
+# secrets and per-machine state
+*.env
+.env*
+.vercel/
+build/vercel_password.txt
+build/endpoint.txt
+build/deployment.txt
+build/.push*.json
+build/.deploy.json
+build/.manifest.json
+build/.release_current
+build/cookies*.txt
+vercel-app/api/_meta.json
+
+# bulk: binaries, models, outputs, virtualenvs
+build/.venv/
+build/vendor/
+build/darwin_bin/
+build/ytframe_darwin
+build/ytmove_pack/bin/
+build/outputs/
+build/results/
+build/run_inputs/
+__pycache__/
+*.log

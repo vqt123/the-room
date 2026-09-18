@@ -1,0 +1,125 @@
+<!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>Senior Year '88</title>
+<style>
+:root{--bg:#0b0c10;--card:#15171d;--ink:#eceadf;--mut:#8f97a6;--acc:#ffb43c;--ok:#5ddc97;--bad:#ff6b6b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:30px 20px}
+h1{font-size:40px;margin:0 0 2px;letter-spacing:.06em;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+   color:var(--acc);text-shadow:2px 2px 0 #7a4b00}
+.sub{color:var(--mut);margin:0 0 22px}
+.grid{display:grid;grid-template-columns:380px 1fr;gap:22px}@media(max-width:860px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border-radius:14px;padding:20px}
+label{display:block;font-weight:600;margin:14px 0 6px}label:first-child{margin-top:0}
+input[type=password]{width:100%;padding:10px 12px;border-radius:8px;border:1px solid #2a2f3a;background:#0b0c10;color:var(--ink);font-size:15px}
+.drop{border:2px dashed #2a2f3a;border-radius:10px;padding:16px;text-align:center;color:var(--mut);cursor:pointer}
+.drop.has{border-color:var(--acc);color:var(--ink)}
+.drop img{max-height:130px;border-radius:8px;display:block;margin:0 auto 8px}
+button{margin-top:18px;width:100%;padding:14px;border:0;border-radius:10px;background:var(--acc);color:#1a1200;font-size:17px;font-weight:800;cursor:pointer;letter-spacing:.03em}
+button:disabled{opacity:.5;cursor:default}
+.small{font-size:13px;color:var(--mut)}
+.row{display:flex;gap:10px;align-items:center;margin-top:12px}
+.status{margin-top:14px;min-height:22px}.status.err{color:var(--bad)}.status.ok{color:var(--ok)}
+video{width:100%;border-radius:10px;background:#000;display:block}
+.out h3{margin:0 0 8px;font-size:14px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.stamps{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.stamp{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--acc);border:1px solid #3a2f18;border-radius:6px;padding:2px 7px}
+.stamp.on{background:#3a2f18;color:#ffd894}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--mut);border-top-color:var(--ink);border-radius:50%;animation:s .8s linear infinite;vertical-align:-2px;margin-right:8px}
+@keyframes s{to{transform:rotate(360deg)}}
+a{color:var(--acc)}.foot{margin-top:26px;color:var(--mut);font-size:13px}
+.savebtn{display:inline-block;margin-top:12px;padding:10px 16px;border-radius:8px;background:#2a2f3a;color:var(--ink);text-decoration:none;font-weight:600}
+</style>
+<div class=wrap>
+<h1>SENIOR YEAR '88</h1>
+<p class=sub>Drop one photo. Get the home video of a school year that never happened, on tape, with the date stamp rolling.</p>
+<div class=grid>
+<form class=card id=f>
+<label>Your photo</label>
+<div class=drop id=dropA><span>Drop a photo here or click to choose</span></div>
+<input type=file id=fileA accept="image/*" hidden>
+<div class=row><input type=checkbox id=couple><label for=couple style="margin:0;font-weight:500">Add a second person <span class=small>(makes it "Our Senior Year")</span></label></div>
+<div id=bwrap style="display:none"><label>Their photo</label><div class=drop id=dropB><span>Drop the second photo</span></div><input type=file id=fileB accept="image/*" hidden></div>
+<div class=row><input type=checkbox id=portrait><label for=portrait style="margin:0;font-weight:500">Phone shape <span class=small>(1080x1920, for posting)</span></label></div>
+<label>Password</label><input type=password id=pw>
+<button id=go>Make my tape</button>
+<div class=status id=st></div>
+<div class=stamps id=stamps></div>
+</form>
+<div class=card>
+<div class=out id=out>
+<h3>The tape</h3>
+<p class=small id=blurb>Five scenes are generated from your one photo on a Comfy Dev Platform serverless endpoint. Then a
+private custom node inside that endpoint, a compiled binary, turns them into a VHS tape: 4:3 crop, camcorder drift, chroma
+bleed, tape grain, scanlines, a rolling tracking band, head-switching noise along the bottom, the date stamp advancing scene
+to scene, snow between the shots, hiss and mains hum underneath. About a minute when the worker is warm.</p>
+</div>
+</div></div>
+<div class=card style="margin-top:16px" id=queue><b>Endpoint queue</b> <span class=small id=qtext>loading...</span><div class=small id=qjobs></div></div>
+<details class=card style="margin-top:16px" id=dbg><summary style="cursor:pointer"><b>Debug</b> <span class=small>build, release, deployment, endpoint health, current job</span></summary><pre id=dbgpre class=small style="white-space:pre-wrap;word-break:break-all;margin:10px 0 0"></pre><p class=small><a href=# id=dbgrefresh>refresh</a></p></details>
+<p class=foot>Built on the Comfy Developer Platform. The pictures come from Qwen-Image-Edit-2511; the tape comes from a private
+custom node that exists only inside this Build. <a href=/>Find It</a> and <a href=/moves.html>Steal the Moves</a> are the other two.</p>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const SCENES=['SEP 04 1987','OCT 16 1987','DEC 20 1987','MAR 12 1988','MAY 20 1988'];
+let photoA=null,photoB=null,curJob=null;
+try{$('#pw').value=localStorage.getItem('stm_pw')||''}catch(e){}
+$('#stamps').innerHTML=SCENES.map(s=>`<span class=stamp>${s}</span>`).join('');
+function wire(dropId,fileId,set){
+  const d=$(dropId),fi=$(fileId);
+  d.onclick=()=>fi.click();
+  fi.onchange=e=>set(e.target.files[0]);
+  ['dragover','dragenter'].forEach(ev=>d.addEventListener(ev,e=>e.preventDefault()));
+  d.addEventListener('drop',e=>{e.preventDefault();set(e.dataTransfer.files[0]);});
+}
+function shot(d,f){const r=new FileReader();r.onload=()=>{d.classList.add('has');d.innerHTML=`<img src="${r.result}"><span>${f.name}</span>`;};r.readAsDataURL(f);}
+wire('#dropA','#fileA',f=>{if(f){photoA=f;shot($('#dropA'),f);}});
+wire('#dropB','#fileB',f=>{if(f){photoB=f;shot($('#dropB'),f);}});
+$('#couple').onchange=e=>{$('#bwrap').style.display=e.target.checked?'block':'none';if(!e.target.checked)photoB=null;};
+function mark(i){document.querySelectorAll('.stamp').forEach((s,n)=>s.classList.toggle('on',n<=i));}
+$('#f').onsubmit=async e=>{
+  e.preventDefault();
+  if(!photoA){$('#st').className='status err';$('#st').textContent='pick a photo first';return;}
+  try{localStorage.setItem('stm_pw',$('#pw').value)}catch(err){}
+  const fd=new FormData();
+  fd.append('password',$('#pw').value);fd.append('photoA',photoA);
+  if($('#couple').checked&&photoB)fd.append('photoB',photoB);
+  if($('#portrait').checked)fd.append('portrait','1');
+  fd.append('seed',String(Math.floor(Math.random()*1e9)));
+  $('#go').disabled=true;$('#st').className='status';$('#st').innerHTML='<span class=spin></span>sending your photo...';
+  const t0=Date.now();
+  try{
+    const r=await fetch('/api/tape',{method:'POST',body:fd});const j=await r.json();
+    if(j.error){throw new Error(j.error);}
+    curJob=j.id;poll(j.id,t0);
+  }catch(err){$('#go').disabled=false;$('#st').className='status err';$('#st').textContent=String(err.message||err);}
+};
+async function poll(id,t0){
+  try{
+    const r=await fetch('/api/tapejob?id='+encodeURIComponent(id)+'&password='+encodeURIComponent($('#pw').value));
+    const j=await r.json();const secs=((Date.now()-t0)/1000).toFixed(0);
+    if(j.state==='done'){
+      $('#go').disabled=false;$('#st').className='status ok';$('#st').textContent=`tape ready in ${secs}s`;mark(SCENES.length-1);
+      $('#out').innerHTML=`<h3>The tape</h3><video controls autoplay loop playsinline src="${j.video_url}"></video>
+        <a class=savebtn href="${j.video_url}" target=_blank rel=noopener>Open / save the tape (${j.size_kb} KB)</a>
+        <p class=small style="margin-top:10px">Sound is on the tape: hiss and mains hum. Unmute to hear it.</p>`;
+      curJob=null;return;
+    }
+    if(j.state==='error'){$('#go').disabled=false;$('#st').className='status err';$('#st').textContent=j.error;curJob=null;return;}
+    const m=/scene (\d+) of/.exec(j.status||'');if(m)mark(parseInt(m[1],10)-1);
+    $('#st').className='status';$('#st').innerHTML=`<span class=spin></span>${j.status||'working'} · ${secs}s`;
+    setTimeout(()=>poll(id,t0),3000);
+  }catch(err){setTimeout(()=>poll(id,t0),4000);}
+}
+async function refreshQueue(){try{const r=await fetch('/api/queue?password='+encodeURIComponent($('#pw').value)+(curJob?'&id='+curJob:''));const q=await r.json();
+if(q.error){$('#qtext').textContent=q.error;return;}
+$('#qtext').textContent=`${q.waiting} job${q.waiting===1?'':'s'} in the queue · worker ${q.running?'busy':(q.waiting?'waking up (a few minutes when cold)':'idle')}`+(q.ahead!=null?` · yours is #${q.ahead+1}`:'');
+$('#qjobs').innerHTML=(q.jobs||[]).map(j=>`<span style="display:inline-block;margin:6px 6px 0 0;padding:2px 8px;border-radius:6px;background:${j.started?'#2b3a2f':'#2a2f3a'}">${j.id} ${j.started?'running':'waiting'}</span>`).join('');
+}catch(e){$('#qtext').textContent='queue unavailable';}}
+setInterval(refreshQueue,5000);refreshQueue();
+async function refreshDebug(){try{const r=await fetch('/api/debug?password='+encodeURIComponent($('#pw').value)+(curJob?'&id='+curJob:''));$('#dbgpre').textContent=JSON.stringify(await r.json(),null,2);}catch(e){$('#dbgpre').textContent='debug unavailable: '+e;}}
+$('#dbgrefresh').onclick=e=>{e.preventDefault();refreshDebug();};
+$('#dbg').addEventListener('toggle',()=>{if($('#dbg').open)refreshDebug();});
+setInterval(()=>{if($('#dbg').open)refreshDebug();},10000);
+</script>
