@@ -26,6 +26,7 @@ h2{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut)
 .right{display:flex;flex-direction:column;gap:18px;min-height:0}
 .right .card{flex:1;min-height:0;overflow:auto}
 .join{font-size:17px;color:var(--mut)}
+.story{font-size:20px;line-height:1.45;color:var(--ink);padding:4px 2px}.story:empty{display:none}
 .join b{color:var(--ink)}
 .ctl{margin-left:auto;display:flex;align-items:center;gap:14px}
 .ctl button{padding:12px 22px;border:0;border-radius:12px;background:var(--acc);color:#1a1400;
@@ -47,6 +48,7 @@ h3{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)
   </div>
   <div class=bar><i id=bar></i></div>
   <div class=stage id=stage><div class=msg id=msg>starting up...</div></div>
+  <div class=story id=story></div>
   <div class=join>Join on your phone: <b id=url>-</b> &nbsp;&middot;&nbsp; <span id=note>the top of the queue is drawn every 30 seconds</span></div>
 </div>
 <div class=right>
@@ -125,7 +127,7 @@ function clock(){
 
 function render(){
   const cur=st.current;
-  const vn = st.mode==='vn' || st.mode==='vnfind', pairs = st.mode==='pairs';
+  const vn = st.mode==='vn' || st.mode==='vnfind', pairs = st.mode==='pairs' || st.mode==='story';
   $('#hunt').textContent = cur ? (cur.mode==='vnfind' ? 'find the '+(cur.subject||'')+(cur.found?' - FOUND':'')
     : cur.mode==='vn' ? (cur.subject || cur.things.map(t=>t.text).join(' '))
     : cur.mode==='mash' ? cur.things.map(t=>t.text).join(' + ')
@@ -133,7 +135,7 @@ function render(){
   $('#qlist').style.display   = vn ? 'none' : '';
   $('#vnboard').style.display = vn ? '' : 'none';
   $('#qhead').textContent = vn ? 'One vote each - top of each column gets drawn'
-    : pairs ? 'On the list - press Submit to draw all of it'
+    : pairs ? (st.mode==='story' ? 'On the list - press Submit and the storyteller weaves it into one picture' : 'On the list - press Submit to draw all of it')
     : 'Next round - add yours on your phone';
   const nxt = st.drawing[0] || st.ready[0];
   $('#note').textContent = nxt ? 'next round: '+nxt.things.map(t=>t.text).join(', ')
@@ -142,6 +144,7 @@ function render(){
   warm(st.preload);
   paint();
   const stage=$('#stage');
+  $('#story').textContent = cur && cur.story ? cur.story : '';
   if(cur){
     if(shown!==cur.id){
       shown=cur.id;

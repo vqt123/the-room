@@ -18,7 +18,8 @@ Three other modes are in the code and selectable per session:
 
 | mode | what happens on Submit |
 |---|---|
-| `pairs` | everyone's verb + noun in one picture (the live one) |
+| `story` | everyone's verb + noun go to an **LLM node inside the job**, which writes a two-sentence story containing all of them; the story becomes the image prompt and is shown under the picture (the live one) |
+| `pairs` | everyone's verb + noun in one picture, no LLM |
 | `find` | each thing on the list is drawn, then **hidden** in a busy scene; the room races to tap it; each thing goes to whoever finds it first |
 | `mash` | every word on the list in one picture, no hiding |
 | `vn` / `vnfind` | one vote each on verbs and nouns; the winning pair is drawn (or drawn and hidden) |
@@ -43,6 +44,14 @@ phones / projector  --->  Vercel (static pages + Python functions)
   ComfyUI graph per round (there is no fixed workflow file; the graph depends on how many
   things were submitted). `ytmove_pack/` is the private node pack. `release.sh` /
   `swap_deployment.sh` push it to the Comfy Dev Platform and swap the live endpoint.
+
+**The LLM is in the graph, not in the web app.** `story` mode uses ComfyUI's `GeminiNode` - one
+of the partner "API nodes" that route through Comfy's API - wired straight into the text
+encoder through a core `StringConcatenate`. The whole round is one job on the endpoint: LLM
+call, prompt join, sampler pass. The story also rides out as the picture's filename, which is
+how the room gets to read it. One catch worth knowing: the node calls `api.comfy.org`, which
+only knows production keys, so the job carries a separate `api_key_comfy_org` in `extra_data`
+(the SDK's `submit(workflow, api_key=...)`) even when the endpoint itself is on staging.
 
 The pictures come from Qwen-Image-Edit-2511 with the 4-step Lightning LoRA, handed a blank
 canvas: an edit model asked to edit nothing draws a whole new picture, which is why the
@@ -101,6 +110,7 @@ attached (both are one click in the Vercel marketplace), and these env vars on t
 | `APP_PASSWORD` | the shared room password; every round spends GPU time |
 | `KV_REST_API_URL`, `KV_REST_API_TOKEN` | from the Redis store |
 | `BLOB_READ_WRITE_TOKEN` | from the Blob store |
+| `COMFY_PARTNER_API_KEY` | a **production** Comfy API key with credits, for the LLM node in `story` mode |
 | `QSTASH_TOKEN` | only if you want the optional clock |
 
 Then, roughly: `cd build && ./release.sh` to bake the pack into a release and deploy it,

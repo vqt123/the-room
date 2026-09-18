@@ -28,6 +28,7 @@ button:disabled{opacity:.45;cursor:default}
 .up{background:#2a2f3a;color:var(--ink);border-radius:999px;font-weight:700;font-size:14px;padding:7px 13px;min-width:56px}
 .up.on{background:var(--acc);color:#1a1400}
 .status{min-height:20px;font-size:14px}
+.story{margin-top:10px;font-size:15px;line-height:1.5;color:var(--ink)}.story:empty{display:none}
 .busy{padding:18px 14px;line-height:1.5;font-size:16px}.busy .n{color:var(--mut);font-size:13px;margin-top:4px}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--mut);border-top-color:var(--ink);border-radius:50%;animation:s .8s linear infinite;vertical-align:-2px;margin-right:8px}
 @keyframes s{to{transform:rotate(360deg)}}.status.err{color:var(--bad)}.status.ok{color:var(--ok)}
@@ -54,6 +55,7 @@ a{color:var(--acc)}
   <div id=next></div>
   <div class=stage id=stage><p class=small style="padding:14px;line-height:1.45">Nothing on screen yet.</p></div>
   <div class=status id=result></div>
+  <div class=story id=story></div>
 </div>
 
 <div class=card id=addcard style="display:none">
@@ -171,6 +173,7 @@ function stage(cur){
     shownItem=null; return;
   }
   $('#next').innerHTML = drawingBanner();
+  $('#story').textContent = cur.story || '';
   if(shownItem===cur.id) return;
   shownItem=cur.id; myTaps=0; $('#result').textContent='';
   wrap.innerHTML='';
@@ -200,7 +203,7 @@ async function tap(ev,img,cur){
 
 function render(){
   const cur=st.current;
-  const vnf = st.mode==='vnfind', vn = st.mode==='vn' || vnf, pairs = st.mode==='pairs';
+  const vnf = st.mode==='vnfind', vn = st.mode==='vn' || vnf, pairs = st.mode==='pairs' || st.mode==='story';
   const mash = st.mode==='mash' || pairs;
   const picture = (vn && !vnf) || mash;
   $('#onebox').style.display = (vn||pairs) ? 'none' : '';
@@ -219,7 +222,8 @@ function render(){
   const left=Math.max(0,Math.round(st.show_left/1000));
   $('#clock').textContent = pairs ? (cur ? 'up' : '') : cur ? left+'s left' : 'soon';
   $('#cap').textContent = pairs
-    ? 'Everyone\'s verb + noun goes into ONE picture when Submit is pressed on the big screen. Then the list is cleared.'
+    ? (st.mode==='story' ? 'An LLM inside the job weaves everyone\'s lines into one short story, and the story becomes the picture. Then the list is cleared.'
+       : 'Everyone\'s verb + noun goes into ONE picture when Submit is pressed on the big screen. Then the list is cleared.')
     : vnf
     ? 'One vote in each pool. What wins gets drawn, hidden in a busy picture, and you have to tap it.'
     : vn

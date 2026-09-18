@@ -9,6 +9,7 @@
 #        mash   - every word typed this window goes into one picture
 #        vn     - one vote each on verbs and nouns; the winning pair gets drawn
 #        vnfind - the winning pair gets drawn AND hidden, and the room has to tap it
+#        story  - like pairs, but an LLM node inside the job writes a story from all the lines first
 #   ./roomctl.sh say verb|noun "dancing" [sess]  submit into a pool (vn mode)
 set -e
 cd "$(dirname "$0")"

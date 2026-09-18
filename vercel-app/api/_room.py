@@ -19,7 +19,8 @@ import json, os, random, re, secrets, sys, time
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import _blob
 import _kv
-from _findcore import TAP_PAD, answers_many, poll, puzzle_url, submit_mash, submit_many, submit_vn
+from _findcore import (TAP_PAD, answers_many, poll, puzzle_url, story_text, submit_mash, submit_many,
+                       submit_story, submit_vn)
 from _findgraph import MAX_THINGS, MAX_WORDS, to_ing
 from _core import check_password  # noqa: F401
 
@@ -43,7 +44,8 @@ KINDS = ("verb", "noun")
 # "is this the single-ballot game?" must ask about both, or ballots silently stop counting.
 VN_MODES = ("vn", "vnfind")
 # Modes that put everything submitted this window into one picture, with no hiding.
-MASH_MODES = ("mash", "pairs")
+MASH_MODES = ("mash", "pairs", "story")
+STORY_MS = 20_000           # an LLM call plus one sampler pass, measured ~7 s + 11 s
 PRELOAD_MS = 9_000          # how early the next picture's URL is handed out, to warm the cache
 STUCK_MS = 210_000          # a job still going after this long stops holding the queue up
 TTL_S = 86_400              # a session forgets itself after a day
@@ -74,7 +76,7 @@ def _clean(s, n):
 
 
 def play_ms(n, mode="find"):
-    if mode == "pairs":
+    if mode in ("pairs", "story"):
         return 0
     if mode == "vnfind":
         return VNFIND_PLAY_MS
@@ -89,6 +91,8 @@ def draw_ms(n, mode="find"):
     """How long this round should take to draw. Used to schedule the next tick."""
     if mode == "vnfind":
         return FIND_BASE_MS
+    if mode == "story":
+        return STORY_MS
     if mode in MASH_MODES or mode == "vn":
         return MASH_MS
     return FIND_BASE_MS + FIND_PER_MS * max(0, n - 1)
@@ -100,7 +104,7 @@ def get_mode(sess):
 
 def set_mode(sess, mode):
     mode = str(mode or "").strip().lower()
-    mode = mode if mode in ("find", "mash", "pairs", "vn", "vnfind") else "find"
+    mode = mode if mode in ("find", "mash", "pairs", "story", "vn", "vnfind") else "find"
     _kv.cmd("SET", f"rm:{sess}:mode", mode, "EX", TTL_S)
     return {"mode": mode}
 
@@ -167,7 +171,7 @@ def state(sess):
                                      else None)})
         row = {"id": rid, "ms": r["ms"], "job": r.get("job"), "scene": r.get("scene"),
                "mode": r.get("mode", "find"), "prompt": r.get("prompt"),
-               "subject": r.get("subject"),
+               "subject": r.get("subject"), "story": r.get("story"),
                "state": st, "things": things, "count": len(things),
                "found": sum(1 for t in things if t["found_by"])}
         if st == "drawing":
@@ -215,7 +219,7 @@ def state(sess):
             "history": shown[-6:], "current": onscreen, "onscreen": onscreen,
             # In pairs the house never fills in: an empty list means wait, and the picture
             # that is up stays up until there is genuinely something new to draw.
-            "can_start": len(live) + len(ready) < BUFFER and (mode != "pairs" or bool(queue)),
+            "can_start": len(live) + len(ready) < BUFFER and (mode not in ("pairs", "story") or bool(queue)),
             "can_show": bool(ready) and show_left == 0,
             "show_left": show_left, "period": window or play_ms(1, mode),
             "mode": mode, "preload": preload,
@@ -286,12 +290,15 @@ def start(sess, force=False):
             return _start_vn(sess, st, rid, hide=(mode == "vnfind"))
         cap = MAX_WORDS if mode in MASH_MODES else MAX_THINGS
         picked = st["queue"][:cap]
-        if not picked and mode == "pairs":
+        if not picked and mode in ("pairs", "story"):
             return {"skipped": "nothing on the list yet"}
         if not picked:
             picked = [add(sess, random.choice(HOUSE), "the house", "housebot00")]
         words = [p["text"] for p in picked]
-        if mode in MASH_MODES:
+        if mode == "story":
+            got = submit_story(words)
+            items = [{"id": p["id"], "text": p["text"]} for p in picked]
+        elif mode in MASH_MODES:
             got = submit_mash(words)
             items = [{"id": p["id"], "text": p["text"]} for p in picked]
         else:
@@ -402,6 +409,11 @@ def publish(sess, rid):
     url = puzzle_url(job_id)
     with urllib.request.urlopen(url, timeout=60) as r:
         _blob.put(f"rm/{sess}/img/{rid}.png", r.read(), "image/png")
+    if rec.get("mode") == "story":
+        story = story_text(job_id)
+        if story:
+            rec["story"] = story
+            _kv.cmd("HSET", _room_key(sess), f"n:{rid}", json.dumps(rec))
     if rec.get("mode") in MASH_MODES or rec.get("mode") == "vn":
         _kv.pipe([["HSET", _room_key(sess), f"d:{rid}", str(int(time.time() * 1000))],
                   ["EXPIRE", _room_key(sess), TTL_S]])

@@ -257,6 +257,45 @@ def vn_prompt(verb, noun, rng=None):
             f"colours, no text, no watermark, no border."), subject, base
 
 
+STORY_STYLE = (". Rich detail, cartoon illustration, thin black outlines, flat bright colours, every character and "
+               "object from the story clearly visible in one frame, no text, no watermark, no border.")
+
+
+def story_prompt(lines):
+    listed = "; ".join(str(x).strip() for x in lines if str(x).strip())[:1500]
+    return (f"Here is a list of things a room full of people typed: {listed}. Write ONE very short story, two "
+            f"sentences at most and under 220 characters in total, in which every one of these things appears and "
+            f"they interact with each other. Plain words, present tense, no title, no quotes, no line breaks, no "
+            f"characters other than letters, digits, spaces, commas and full stops. Output only the story.")
+
+
+def build_story(lines, seed=1234, llm_model="gemini-3-1-flash-lite"):
+    """Everyone's lines go to an LLM node INSIDE the graph, which writes a short story that
+    contains all of them; the story becomes the image prompt, and it also becomes the saved
+    file's name so the room can read it. One job: LLM call, text join, one sampler pass.
+    Returns (graph, the LLM prompt).
+    """
+    g = {}
+    g["40"] = {"class_type": "GeminiNode", "_meta": {"title": "the storyteller"},
+               "inputs": {"prompt": story_prompt(lines), "model": llm_model, "seed": seed % 2147483647}}
+    g["41"] = {"class_type": "StringConcatenate", "_meta": {"title": "story + style"},
+               "inputs": {"string_a": ["40", 0], "string_b": STORY_STYLE, "delimiter": ""}}
+    g["1"] = {"class_type": "EmptyImage", "_meta": {"title": "canvas"},
+              "inputs": {"width": 1328, "height": 1328, "batch_size": 1, "color": 8421504}}
+    g["3"] = {"class_type": "UNETLoader", "inputs": {"unet_name": UNET, "weight_dtype": "default"}}
+    g["4"] = {"class_type": "CLIPLoader", "inputs": {"clip_name": CLIP, "type": "qwen_image", "device": "default"}}
+    g["5"] = {"class_type": "VAELoader", "inputs": {"vae_name": VAE}}
+    g["6"] = {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["3", 0], "shift": 3.1}}
+    g["7"] = {"class_type": "CFGNorm", "inputs": {"model": ["6", 0], "strength": 1.0}}
+    g["8"] = {"class_type": "LoraLoaderModelOnly", "inputs": {"model": ["7", 0], "lora_name": LORA,
+              "strength_model": 1.0}}
+    out = _chain(g, "1", ["41", 0], MASH_NEG, seed % 0xFFFFFFFF,
+                 ("9", "10", "11", "12", "13", "14", "15", "16"))
+    g["31"] = {"class_type": "SaveImage", "_meta": {"title": "the picture, named after its story"},
+               "inputs": {"images": [out, 0], "filename_prefix": ["40", 0]}}
+    return g, g["40"]["inputs"]["prompt"]
+
+
 def build_vn(verb, noun, seed=1234):
     """The verb-and-noun round: one subject, one picture, one sampler pass.
 

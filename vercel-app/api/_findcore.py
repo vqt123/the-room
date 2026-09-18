@@ -12,7 +12,7 @@ import json, os, random, re, sys
 # library's queue module for anything these handlers import.
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from comfy_sdk import Comfy
-from _findgraph import (TYPED, UPLOAD, SCENES, SCENE_NAMES, build, build_mash, build_vn,
+from _findgraph import (TYPED, UPLOAD, SCENES, SCENE_NAMES, build, build_mash, build_story, build_vn,
                         scene_index, product_prompt, refine_prompt)
 from _core import check_password  # noqa: F401
 
@@ -90,6 +90,33 @@ def submit_vn(verb, noun, seed=0):
     job = c.submit(c.workflows.from_json(graph))
     return {"id": job.id, "seed": seed, "prompt": prompt, "subject": subject,
             "scene": " ".join(base)}
+
+
+def partner_key():
+    """The key the LLM node uses. It is a different key from the one that opens the endpoint:
+    the node calls the partner API at api.comfy.org, which only knows production keys."""
+    return os.environ.get("COMFY_PARTNER_API_KEY", "").strip() or None
+
+
+def submit_story(lines, seed=0):
+    """The story round: an LLM node in the graph writes the prompt from everyone's lines."""
+    if not partner_key():
+        raise RuntimeError("server is missing COMFY_PARTNER_API_KEY (the LLM node needs a production key)")
+    seed = int(seed) or random.randrange(1, 2 ** 31)
+    graph, llm_prompt = build_story(lines, seed=seed)
+    c = client()
+    job = c.submit(c.workflows.from_json(graph), api_key=partner_key())
+    return {"id": job.id, "seed": seed, "prompt": llm_prompt, "scene": "told by the storyteller"}
+
+
+def story_text(job_id):
+    """The story rides out as the picture's filename."""
+    c = client()
+    out = _output(c.jobs.get(job_id), "31")
+    if not out or not out.name:
+        return None
+    name = out.name.rsplit("_", 2)[0] if "_0" in out.name else out.name
+    return name.replace("_", " ").strip()
 
 
 TERMINAL_OK = ("succeeded", "completed", "success")
