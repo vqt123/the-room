@@ -160,7 +160,11 @@ def state(sess):
             things.append({"id": t["id"], "text": t["text"], "by": src.get("b", "someone"),
                            "kind": t.get("kind"), "votes": t.get("votes"),
                            "found_by": w["name"] if w else None,
-                           "thumb": f"{base}/rm/{sess}/thumb/{rid}/{t['id']}.png" if rid in dones else None})
+                           # Only the hide-and-find modes draw each thing on its own; the
+                           # others have no thumbnail, and a URL to nothing is a broken image.
+                           "thumb": (f"{base}/rm/{sess}/thumb/{rid}/{t['id']}.png"
+                                     if rid in dones and r.get("mode", "find") in ("find", "vnfind")
+                                     else None)})
         row = {"id": rid, "ms": r["ms"], "job": r.get("job"), "scene": r.get("scene"),
                "mode": r.get("mode", "find"), "prompt": r.get("prompt"),
                "subject": r.get("subject"),
