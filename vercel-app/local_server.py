@@ -42,8 +42,24 @@ class Dispatch(SimpleHTTPRequestHandler):
         except ModuleNotFoundError:
             return None
 
+    def _cross_site(self):
+        """True when a page on some OTHER site is making this request.
+
+        Binding to 127.0.0.1 is not a boundary: any page the host is browsing can fetch
+        localhost, and the tunnel makes the API reachable by anything that learns the URL. The
+        game's own pages are same-origin, and a browser cannot forge Origin, so refusing a
+        mismatch blocks a stranger's page from calling reset or config while leaving the phones,
+        the projector and killctl.sh (which send no Origin at all) working."""
+        origin = self.headers.get("Origin")
+        if not origin:
+            return False
+        return urlparse(origin).netloc.lower() != (self.headers.get("Host") or "").lower()
+
     def _route(self, verb):
         if urlparse(self.path).path.startswith("/api/"):
+            if self._cross_site():
+                self.send_error(403, "cross-site request")
+                return
             cls = self._api()
             if cls is None or not hasattr(cls, verb):
                 self.send_error(404)
